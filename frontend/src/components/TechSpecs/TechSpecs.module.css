@@ -1,0 +1,62 @@
+.specs {
+    padding: 5rem 1.5rem;
+    background-color: #121218;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.sectionTitle {
+    text-align: center;
+    font-size: 2.25rem;
+    color: #ffffff;
+    margin-bottom: 3rem;
+    font-weight: 700;
+}
+
+.grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2rem;
+}
+
+.card {
+    flex: 1 1 260px;
+    max-width: 280px;
+    background-color: rgb(25, 25, 38);
+    padding: 2rem;
+    border-radius: 0.75rem;
+    border-left: 3px solid #6366f1;
+}
+
+.cardTitle {
+    color: #ffffff;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+}
+
+.cardDesc {
+    color: #9ca3af;
+    line-height: 1.6;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+    .sectionTitle {
+        font-size: 1.75rem;
+        margin-bottom: 2rem;
+    }
+    .grid {
+        flex-direction: column;
+        align-items: center;
+    }
+    .card {
+        max-width: 100%;
+        width: 100%;
+    }
+}
