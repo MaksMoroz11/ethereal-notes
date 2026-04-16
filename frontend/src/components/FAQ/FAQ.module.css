@@ -1,10 +1,10 @@
-.features {
+.faq {
     padding: 5rem 1.5rem;
-    background-color: #121218;
+    background-color: #16161f;
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 800px;
     margin: 0 auto;
 }
 
@@ -16,37 +16,27 @@
     font-weight: 700;
 }
 
-.grid {
+.list {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 2rem;
+    flex-direction: column;
+    gap: 1.5rem;
 }
 
-.card {
-    flex: 1 1 280px;
-    max-width: 320px;
-    min-width: 260px;
+.item {
     background-color: rgb(30, 30, 45);
-    padding: 2rem;
+    padding: 1.5rem;
     border-radius: 0.75rem;
     border: 1px solid rgb(50, 50, 65);
-    transition: transform 0.2s, border-color 0.2s;
 }
 
-.card:hover {
-    transform: translateY(-4px);
-    border-color: #6366f1;
-}
-
-.cardTitle {
+.question {
     color: #ffffff;
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     font-weight: 600;
     margin: 0 0 0.75rem;
 }
 
-.cardDesc {
+.answer {
     color: #9ca3af;
     line-height: 1.6;
     margin: 0;
@@ -58,12 +48,7 @@
         font-size: 1.75rem;
         margin-bottom: 2rem;
     }
-    .grid {
-        gap: 1.5rem;
-    }
-    .card {
-        padding: 1.5rem;
-        flex: 1 1 100%;
-        max-width: 100%;
+    .item {
+        padding: 1.25rem;
     }
 }
