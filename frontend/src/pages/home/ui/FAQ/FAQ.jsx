@@ -13,11 +13,11 @@ export default function FAQ() {
         <section className={styles.faq}>
             <div className={styles.container}>
                 <h2 className={styles.sectionTitle}>Частые вопросы</h2>
-                <div className={styles.list}>
+                <div className={styles.faqList}>
                     {faqs.map((item, i) => (
                         <div key={i} className={styles.item}>
-                        <h3 className={styles.question}>{item.q}</h3>
-                        <p className={styles.answer}>{item.a}</p>
+                        <h3 className={styles.itemQuestion}>{item.q}</h3>
+                        <p className={styles.itemAnswer}>{item.a}</p>
                         </div>
                     ))}
                 </div>

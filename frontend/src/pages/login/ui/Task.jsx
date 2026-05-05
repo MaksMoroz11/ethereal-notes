@@ -50,7 +50,7 @@ export default function Task({ task }) {
 					onKeyDown={e => e.key === 'Enter' && e.target.blur()}
 				/>
 			) : (
-				<h3 className={`${styles.title} ${styles.editable}`} onClick={() => setEditingDesc(true)}>
+				<h3 className={`${styles.title} ${styles.titleEditable}`} onClick={() => setEditingDesc(true)}>
 					{desc}
 				</h3>
 			)}
@@ -64,7 +64,7 @@ export default function Task({ task }) {
 					onBlur={() => setEditingAdditional(false)}
 				/>
 			) : (
-				<p className={`${styles.desc} ${styles.editable}`} onClick={() => setEditingAdditional(true)}>
+				<p className={`${styles.desc} ${styles.descEditable}`} onClick={() => setEditingAdditional(true)}>
 					{additionalDesc || <span className={styles.placeholder}>Добавить описание…</span>}
 				</p>
 			)}

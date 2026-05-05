@@ -33,7 +33,7 @@
     border-radius: 4px;
 }
   
-.sidebarItem.active {
+.sidebarItemActive {
     background-color: #6366f1;
 }
   

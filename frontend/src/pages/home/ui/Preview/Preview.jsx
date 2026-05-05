@@ -9,7 +9,7 @@ export default function Preview() {
                     <div className={styles.sidebar}>
                         <div className={styles.sidebarItem}></div>
                         <div className={styles.sidebarItem}></div>
-                        <div className={`${styles.sidebarItem} ${styles.active}`}></div>
+                        <div className={styles.sidebarItemActive}></div>
                     </div>
                     <div className={styles.mainArea}>
                         <div className={styles.headerRow}>
