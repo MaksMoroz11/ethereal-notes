@@ -1,0 +1,80 @@
+.footer {
+    background-color: rgb(30, 30, 45);
+    padding: 3rem 1.5rem 1.5rem;
+    color: rgb(141, 141, 141);
+  }
+  
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    gap: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid rgb(50, 50, 65);
+  }
+  
+  .brand h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0 0 0.5rem;
+    letter-spacing: -0.02em;
+  }
+  
+  .brand p {
+    max-width: 300px;
+    line-height: 1.6;
+    margin: 0;
+  }
+  
+  .links {
+    display: flex;
+    gap: 4rem;
+  }
+  
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .column h4 {
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+  }
+  
+  .column a {
+    color: rgb(141, 141, 141);
+    text-decoration: none;
+    font-size: 0.95rem;
+    transition: color 0.2s ease-in-out;
+  }
+  
+  .column a:hover {
+    color: #ffffff;
+  }
+  
+  .copyright {
+    text-align: center;
+    padding-top: 1.5rem;
+    font-size: 0.875rem;
+  }
+  
+  @media (max-width: 768px) {
+    .container {
+      flex-direction: column;
+      gap: 2rem;
+    }
+  
+    .links {
+      flex-direction: column;
+      gap: 2rem;
+    }
+  
+    .brand p {
+      max-width: 100%;
+    }
+  }

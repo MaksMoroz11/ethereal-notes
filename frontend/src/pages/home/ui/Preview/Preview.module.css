@@ -1,0 +1,103 @@
+.preview {
+    padding: 4rem 1.5rem;
+    background-color: #121218;
+}
+  
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+  
+.previewBox {
+    background-color: rgb(30, 30, 45);
+    border-radius: 1rem;
+    border: 1px solid rgb(50, 50, 65);
+    overflow: hidden;
+    display: flex;
+    height: 400px;
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.4);
+}
+  
+.sidebar {
+    width: 200px;
+    background-color: rgb(25, 25, 38);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+  
+.sidebarItem {
+    height: 12px;
+    background-color: rgb(50, 50, 65);
+    border-radius: 4px;
+}
+  
+.sidebarItemActive {
+    background-color: #6366f1;
+}
+  
+.mainArea {
+    flex: 1;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+}
+  
+.headerRow {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+}
+  
+.headerTitle {
+    width: 150px;
+    height: 20px;
+    background-color: rgb(60, 60, 75);
+    border-radius: 4px;
+}
+  
+.headerActions {
+    width: 80px;
+    height: 20px;
+    background-color: rgb(50, 50, 65);
+    border-radius: 4px;
+}
+  
+.kanbanColumns {
+    display: flex;
+    gap: 1rem;
+    height: 100%;
+}
+  
+.column {
+    flex: 1;
+    background-color: rgb(25, 25, 38);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+  
+.cardItem {
+    background-color: rgb(40, 40, 55);
+    border-radius: 0.5rem;
+    height: 60px;
+    border-left: 3px solid #6366f1;
+}
+  
+@media (max-width: 768px) {
+    .previewBox {
+        flex-direction: column;
+        height: auto;
+    }
+    .sidebar {
+        width: 100%;
+        flex-direction: row;
+        height: 40px;
+    }
+    .kanbanColumns {
+        flex-direction: column;
+    }
+}
