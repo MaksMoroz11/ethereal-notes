@@ -1,0 +1,38 @@
+.sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    background-color: var(--color-bg-sidebar);
+    border-right: 1px solid var(--color-border);
+    padding: 1.25rem 0.75rem;
+    min-height: 100%;
+}
+
+.createButton {
+    width: 100%;
+    background-color: var(--color-primary);
+    color: var(--color-text);
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.65rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.createButton:hover {
+    background-color: var(--color-primary-hover);
+    transform: scale(1.02);
+}
+
+.createButton:active {
+    transform: scale(0.98);
+}
+
+.divider {
+    height: 1px;
+    background-color: var(--color-border);
+    margin-top: 1rem;
+}

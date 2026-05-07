@@ -6,10 +6,10 @@ export default function Header() {
 	return (
 		<header className={styles.header}>
 			<nav className={styles.navbar}>
-				<h3 className={styles.title}>ethereal</h3>
+				<Link to="/" className={styles.title}>ethereal</Link>
 				<ul className={styles.navbarNav}>
 					<li className={styles.navItem}>
-						<Link to="/login" className={styles.navLink}>Войти</Link>
+						<Link to="/dashboard" className={styles.navLink}>Войти</Link>
 					</li>
 				</ul>
 			</nav>

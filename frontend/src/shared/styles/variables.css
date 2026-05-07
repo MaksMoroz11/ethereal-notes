@@ -1,0 +1,45 @@
+:root {
+    /* Backgrounds */
+    --color-bg:            #121218;
+    --color-bg-deep:       #16161f;
+    --color-bg-sidebar:    #1c1c2e;
+    --color-bg-elevated:   #1e1e2d;
+    --color-bg-section:    #232336;
+    --color-bg-card:       rgb(30, 30, 45);
+    --color-bg-sunken:     rgb(25, 25, 38);
+    --color-bg-raised:     rgb(40, 40, 55);
+    --color-bg-subtle:     rgb(60, 60, 75);
+    --color-bg-input:      rgba(99, 102, 241, 0.08);
+
+    /* Borders */
+    --color-border:        #2d2d44;
+    --color-border-card:   rgb(50, 50, 65);
+    --color-border-muted:  #4b5563;
+
+    /* Primary accent — indigo */
+    --color-primary:       #6366f1;
+    --color-primary-hover: #4f46e5;
+    --color-primary-light: #a5b4fc;
+    --color-primary-dim:   rgba(99, 102, 241, 0.12);
+
+    /* Text */
+    --color-text:          #ffffff;
+    --color-text-nav:      rgb(141, 141, 141);
+    --color-text-secondary:#e5e7eb;
+    --color-text-muted:    #9ca3af;
+    --color-text-faint:    #6b7280;
+    --color-text-label:    #4b5563;
+
+    /* Semantic */
+    --color-error:         #f87171;
+    --color-error-dim:     rgba(239, 68, 68, 0.12);
+    --color-error-border:  rgba(239, 68, 68, 0.35);
+
+    --color-info:          #60a5fa;
+    --color-warning:       #fbbf24;
+    --color-success:       #34d399;
+
+    /* Avatars */
+    --color-avatar-author:   #6366f1;
+    --color-avatar-assignee: #0e7490;
+}

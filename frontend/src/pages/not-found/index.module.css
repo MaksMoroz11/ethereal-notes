@@ -1,6 +1,6 @@
 .page {
     min-height: 100vh;
-    background-color: #121218;
+    background-color: var(--color-bg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -21,7 +21,7 @@
     font-size: 7rem;
     font-weight: 700;
     line-height: 1;
-    color: #6366f1;
+    color: var(--color-primary);
     letter-spacing: -4px;
     user-select: none;
 }
@@ -29,21 +29,21 @@
 .title {
     font-size: 1.75rem;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--color-text);
     line-height: 1.2;
 }
 
 .subtitle {
     font-size: 1rem;
-    color: #9ca3af;
+    color: var(--color-text-muted);
     line-height: 1.6;
 }
 
 .button {
     margin-top: 0.5rem;
     display: inline-block;
-    background-color: #6366f1;
-    color: #ffffff;
+    background-color: var(--color-primary);
+    color: var(--color-text);
     padding: 0.75rem 2rem;
     border-radius: 0.5rem;
     font-weight: 600;
@@ -52,7 +52,7 @@
 }
 
 .button:hover {
-    background-color: #4f46e5;
+    background-color: var(--color-primary-hover);
     transform: scale(1.02);
 }
 

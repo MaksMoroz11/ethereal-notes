@@ -1,7 +1,7 @@
 .footer {
-    background-color: rgb(30, 30, 45);
+    background-color: var(--color-bg-card);
     padding: 3rem 1.5rem 1.5rem;
-    color: rgb(141, 141, 141);
+    color: var(--color-text-nav);
   }
   
   .container {
@@ -11,13 +11,13 @@
     justify-content: space-between;
     gap: 3rem;
     padding-bottom: 2rem;
-    border-bottom: 1px solid rgb(50, 50, 65);
+    border-bottom: 1px solid var(--color-border-card);
   }
   
   .brand h3 {
     font-size: 1.5rem;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--color-text);
     margin: 0 0 0.5rem;
     letter-spacing: -0.02em;
   }
@@ -40,21 +40,21 @@
   }
   
   .column h4 {
-    color: #ffffff;
+    color: var(--color-text);
     font-size: 1rem;
     font-weight: 600;
     margin: 0 0 0.5rem;
   }
   
   .column a {
-    color: rgb(141, 141, 141);
+    color: var(--color-text-nav);
     text-decoration: none;
     font-size: 0.95rem;
     transition: color 0.2s ease-in-out;
   }
   
   .column a:hover {
-    color: #ffffff;
+    color: var(--color-text);
   }
   
   .copyright {

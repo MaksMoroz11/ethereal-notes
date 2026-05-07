@@ -1,0 +1,10 @@
+.body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.main {
+    flex: 1;
+    overflow-y: auto;
+}
