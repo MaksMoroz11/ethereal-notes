@@ -1,5 +1,5 @@
 .header {
-    background-color: rgb(30, 30, 45);
+    background-color: var(--color-bg-card);
     padding: 1.25rem 2.5rem;
     position: sticky;
     top: 0;
@@ -18,10 +18,11 @@
 .title {
     font-size: 1.5rem;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--color-text);
     letter-spacing: -0.02em;
     margin: 0;
     cursor: pointer;
+    user-select: none;
 }
 
 .navbarNav {
@@ -39,7 +40,7 @@
 
 .navLink {
     text-decoration: none;
-    color: rgb(141, 141, 141);
+    color: var(--color-text-nav);
     font-size: 0.95rem;
     font-weight: 500;
     padding: 0.5rem 0;
@@ -47,12 +48,12 @@
 }
 
 .navLink:hover {
-    color: #cccccc;
+    color: var(--color-text-muted);
     transform: scale(1.05);
 }
 
 .navLink:active {
-    color: #ffffff;
+    color: var(--color-text);
     transform: scale(0.95);
 }
 

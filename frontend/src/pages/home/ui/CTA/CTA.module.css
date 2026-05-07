@@ -1,6 +1,6 @@
 .cta {
     padding: 6rem 1.5rem;
-    background-color: #232336;
+    background-color: var(--color-bg-section);
     text-align: center;
 }
 
@@ -11,21 +11,21 @@
 
 .title {
     font-size: 2.5rem;
-    color: #ffffff;
+    color: var(--color-text);
     font-weight: 700;
     margin: 0 0 1rem;
 }
 
 .subtitle {
     font-size: 1.25rem;
-    color: #9ca3af;
+    color: var(--color-text-muted);
     margin: 0 0 2.5rem;
     line-height: 1.6;
 }
 
 .primaryButton {
-    background-color: #6366f1;
-    color: white;
+    background-color: var(--color-primary);
+    color: var(--color-text);
     padding: 1rem 2.5rem;
     border-radius: 0.5rem;
     border: none;
@@ -36,7 +36,7 @@
 }
 
 .primaryButton:hover {
-    background-color: #4f46e5;
+    background-color: var(--color-primary-hover);
 }
 
 .primaryButton:active {
