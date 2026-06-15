@@ -36,3 +36,72 @@
     background-color: var(--color-border);
     margin-top: 1rem;
 }
+
+.createForm {
+    width: 100%;
+}
+
+.input {
+    width: 100%;
+    background-color: var(--color-bg-card);
+    border: 1px solid var(--color-primary);
+    color: var(--color-text);
+    border-radius: 0.5rem;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    outline: none;
+}
+
+.list {
+    list-style: none;
+    margin: 1rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.5rem;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.item:hover {
+    background-color: var(--color-bg-input);
+    color: var(--color-text-secondary);
+}
+
+.itemActive {
+    background-color: var(--color-bg-input);
+    color: var(--color-text);
+}
+
+.itemTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.itemDelete {
+    background: none;
+    border: none;
+    color: var(--color-text-faint);
+    font-size: 0.75rem;
+    padding: 0.15rem;
+    border-radius: 0.25rem;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+
+.itemDelete:hover {
+    color: var(--color-error);
+}

@@ -4,19 +4,13 @@
     padding: 1.5rem 2rem;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1.25rem;
 }
 
-.boardsBar {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.createBoard {
-    display: flex;
-    gap: 0.5rem;
-    max-width: 360px;
+.boardTitle {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text);
 }
 
 .input {
@@ -33,70 +27,6 @@
 
 .input:focus {
     border-color: var(--color-primary);
-}
-
-.addBoard {
-    background-color: var(--color-primary);
-    color: var(--color-text);
-    border: none;
-    border-radius: 0.5rem;
-    padding: 0 0.9rem;
-    font-size: 0.9rem;
-    transition: background-color 0.2s;
-}
-
-.addBoard:hover {
-    background-color: var(--color-primary-hover);
-}
-
-.tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.tab {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    background-color: var(--color-bg-card);
-    border: 1px solid var(--color-border-card);
-    color: var(--color-text-muted);
-    border-radius: 0.5rem;
-    padding: 0.45rem 0.75rem;
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: border-color 0.2s, color 0.2s;
-}
-
-.tab:hover {
-    color: var(--color-text-secondary);
-    border-color: var(--color-border-muted);
-}
-
-.tabActive {
-    border-color: var(--color-primary);
-    color: var(--color-text);
-}
-
-.tabDelete {
-    background: none;
-    border: none;
-    color: var(--color-text-faint);
-    font-size: 0.75rem;
-    padding: 0.1rem;
-    border-radius: 0.25rem;
-    transition: color 0.15s;
-}
-
-.tabDelete:hover {
-    color: var(--color-error);
-}
-
-.board {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
 }
 
 .createTask {
@@ -167,12 +97,30 @@
 .empty {
     color: var(--color-text-muted);
     font-size: 0.9rem;
-    padding: 3rem 0;
+    padding: 3rem 2rem;
     text-align: center;
 }
 
 .icon {
     font-size: 0.8rem;
+}
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.5rem;
+    z-index: 200;
+}
+
+.modal {
+    width: 100%;
+    max-width: 720px;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 @media (max-width: 900px) {
