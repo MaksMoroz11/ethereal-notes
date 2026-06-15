@@ -38,6 +38,28 @@
     display: flex;
 }
 
+.themeButton {
+    background: none;
+    border: none;
+    color: var(--color-text-nav);
+    font-size: 1rem;
+    padding: 0.4rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, background-color 0.2s, transform 0.1s;
+}
+
+.themeButton:hover {
+    color: var(--color-text);
+    background-color: var(--color-bg-input);
+}
+
+.themeButton:active {
+    transform: scale(0.92);
+}
+
 .navLink {
     text-decoration: none;
     color: var(--color-text-nav);
