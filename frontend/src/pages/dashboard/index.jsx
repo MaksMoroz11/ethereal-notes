@@ -1,34 +1,88 @@
 import React, { useState } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faPlus } from '@fortawesome/free-solid-svg-icons'
+import { useBoardsStore } from '../../shared/store/boardsStore'
+import KanbanCard from './ui/KanbanCard'
 import Task from './ui/Task'
 import styles from './index.module.css'
 
-const task = {
-	uid: '44025',
-	desc: 'Secondary sort criteria ignored when "Parent task" is the first criterion',
-	additional_desc:
-		'Indented child tickets require "Parent task" as the first sort criterion. This breaks all following sort rules. Secondary criteria (priority and project) are ignored — tickets sort only by ticket ID descending instead.',
-	created_at: '2026-05-06T09:16:00Z',
-	updated_at: '2026-05-07T14:03:00Z',
-	author_name: 'Boris Brodski',
-	assignee_name: 'Anna Kovaleva',
-	status: 'В работе',
-	tags: ['DEV', 'BUG'],
-}
+const STATUSES = ['Открыта', 'В работе', 'На проверке', 'Готово']
 
 export default function Dashboard() {
-	const [open, setOpen] = useState(true)
+	const board = useBoardsStore(state => state.boards.find(b => b.id === state.activeId) || null)
+	const createTask = useBoardsStore(state => state.createTask)
+	const deleteTask = useBoardsStore(state => state.deleteTask)
+	const updateTask = useBoardsStore(state => state.updateTask)
+	const [taskTitle, setTaskTitle] = useState('')
+	const [openId, setOpenId] = useState(null)
+
+	if (!board) {
+		return <div className={styles.empty}>Создайте или выберите доску слева</div>
+	}
+
+	function submitTask(e) {
+		e.preventDefault()
+		const value = taskTitle.trim()
+		if (!value) return
+		createTask(value)
+		setTaskTitle('')
+	}
+
+	const openTask = board.tasks.find(task => task.id === openId) || null
 
 	return (
 		<section className={styles.page}>
-			<div className={styles.container}>
-				{open ? (
-					<Task task={task} onClose={() => setOpen(false)} />
-				) : (
-					<button className={styles.reopen} onClick={() => setOpen(true)}>
-						Открыть задачу #{task.uid}
-					</button>
-				)}
+			<h2 className={styles.boardTitle}>{board.title}</h2>
+
+			<form className={styles.createTask} onSubmit={submitTask}>
+				<input
+					className={styles.input}
+					placeholder="Новая задача"
+					value={taskTitle}
+					onChange={e => setTaskTitle(e.target.value)}
+				/>
+				<button type="submit" className={styles.addTask}>
+					<FontAwesomeIcon icon={faPlus} className={styles.icon} />
+					Добавить
+				</button>
+			</form>
+
+			<div className={styles.columns}>
+				{STATUSES.map(status => {
+					const tasks = board.tasks.filter(task => task.status === status)
+					return (
+						<div key={status} className={styles.column}>
+							<div className={styles.columnHead}>
+								<span>{status}</span>
+								<span className={styles.count}>{tasks.length}</span>
+							</div>
+							<div className={styles.columnBody}>
+								{tasks.map(task => (
+									<KanbanCard
+										key={task.id}
+										task={task}
+										onOpen={() => setOpenId(task.id)}
+										onDelete={() => deleteTask(task.id)}
+										onMove={status => updateTask(task.id, { status })}
+									/>
+								))}
+							</div>
+						</div>
+					)
+				})}
 			</div>
+
+			{openTask && (
+				<div className={styles.overlay} onClick={() => setOpenId(null)}>
+					<div className={styles.modal} onClick={e => e.stopPropagation()}>
+						<Task
+							task={openTask}
+							onClose={() => setOpenId(null)}
+							onChange={changes => updateTask(openTask.id, changes)}
+						/>
+					</div>
+				</div>
+			)}
 		</section>
 	)
 }

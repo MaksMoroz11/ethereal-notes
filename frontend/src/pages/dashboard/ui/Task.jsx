@@ -27,7 +27,7 @@ const STATUS_STYLES = {
 	'Готово':      { color: '#34d399', bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.3)'  },
 }
 
-export default function Task({ task, onClose }) {
+export default function Task({ task, onClose, onChange }) {
 	const isBug = task.tags.includes('BUG')
 	const statusStyle = STATUS_STYLES[task.status] ?? STATUS_STYLES['Открыта']
 
@@ -35,6 +35,16 @@ export default function Task({ task, onClose }) {
 	const [additionalDesc, setAdditionalDesc] = useState(task.additional_desc)
 	const [editingDesc, setEditingDesc] = useState(false)
 	const [editingAdditional, setEditingAdditional] = useState(false)
+
+	function saveDesc() {
+		setEditingDesc(false)
+		if (onChange && desc !== task.desc) onChange({ desc })
+	}
+
+	function saveAdditional() {
+		setEditingAdditional(false)
+		if (onChange && additionalDesc !== task.additional_desc) onChange({ additional_desc: additionalDesc })
+	}
 
 	return (
 		<div className={styles.card}>
@@ -71,7 +81,7 @@ export default function Task({ task, onClose }) {
 					value={desc}
 					autoFocus
 					onChange={e => setDesc(e.target.value)}
-					onBlur={() => setEditingDesc(false)}
+					onBlur={saveDesc}
 					onKeyDown={e => e.key === 'Enter' && e.target.blur()}
 				/>
 			) : (
@@ -86,7 +96,7 @@ export default function Task({ task, onClose }) {
 					value={additionalDesc}
 					autoFocus
 					onChange={e => setAdditionalDesc(e.target.value)}
-					onBlur={() => setEditingAdditional(false)}
+					onBlur={saveAdditional}
 				/>
 			) : (
 				<p className={`${styles.desc} ${styles.descEditable}`} onClick={() => setEditingAdditional(true)}>
