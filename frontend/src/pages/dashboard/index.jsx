@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPlus } from '@fortawesome/free-solid-svg-icons'
+import { useBoardsStore } from '../../shared/store/boardsStore'
 import KanbanCard from './ui/KanbanCard'
 import Task from './ui/Task'
 import styles from './index.module.css'
@@ -9,7 +9,10 @@ import styles from './index.module.css'
 const STATUSES = ['Открыта', 'В работе', 'На проверке', 'Готово']
 
 export default function Dashboard() {
-	const { board, createTask, deleteTask, updateTask } = useOutletContext()
+	const board = useBoardsStore(state => state.boards.find(b => b.id === state.activeId) || null)
+	const createTask = useBoardsStore(state => state.createTask)
+	const deleteTask = useBoardsStore(state => state.deleteTask)
+	const updateTask = useBoardsStore(state => state.updateTask)
 	const [taskTitle, setTaskTitle] = useState('')
 	const [openId, setOpenId] = useState(null)
 

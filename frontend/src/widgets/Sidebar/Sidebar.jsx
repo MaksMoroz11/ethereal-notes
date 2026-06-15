@@ -1,9 +1,16 @@
 import React, { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPlus, faTrash } from '@fortawesome/free-solid-svg-icons'
+import { useBoardsStore } from '../../shared/store/boardsStore'
 import styles from './Sidebar.module.css'
 
-export default function Sidebar({ boards, activeId, onCreate, onSelect, onDelete }) {
+export default function Sidebar() {
+	const boards = useBoardsStore(state => state.boards)
+	const activeId = useBoardsStore(state => state.activeId)
+	const createBoard = useBoardsStore(state => state.createBoard)
+	const selectBoard = useBoardsStore(state => state.selectBoard)
+	const deleteBoard = useBoardsStore(state => state.deleteBoard)
+
 	const [adding, setAdding] = useState(false)
 	const [title, setTitle] = useState('')
 
@@ -11,7 +18,7 @@ export default function Sidebar({ boards, activeId, onCreate, onSelect, onDelete
 		e.preventDefault()
 		const value = title.trim()
 		if (!value) return
-		onCreate(value)
+		createBoard(value)
 		setTitle('')
 		setAdding(false)
 	}
@@ -41,14 +48,14 @@ export default function Sidebar({ boards, activeId, onCreate, onSelect, onDelete
 					<li
 						key={board.id}
 						className={`${styles.item} ${board.id === activeId ? styles.itemActive : ''}`}
-						onClick={() => onSelect(board.id)}
+						onClick={() => selectBoard(board.id)}
 					>
 						<span className={styles.itemTitle}>{board.title}</span>
 						<button
 							className={styles.itemDelete}
 							onClick={e => {
 								e.stopPropagation()
-								onDelete(board.id)
+								deleteBoard(board.id)
 							}}
 							aria-label="Удалить доску"
 						>
