@@ -14,7 +14,7 @@ class TaskBase(BaseModel):
 
 
 class TaskCreate(TaskBase):
-    pass
+    board_id: int
 
 
 class TaskUpdate(BaseModel):
@@ -31,5 +31,22 @@ class TaskRead(TaskBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    board_id: int
     created_at: datetime
     updated_at: datetime
+
+
+class BoardCreate(BaseModel):
+    title: str
+
+
+class BoardRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    created_at: datetime
+
+
+class BoardWithTasks(BoardRead):
+    tasks: list[TaskRead] = []
