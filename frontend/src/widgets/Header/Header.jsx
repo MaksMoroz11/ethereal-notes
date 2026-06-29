@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faMoon, faSun } from '@fortawesome/free-solid-svg-icons'
+import { faMoon, faSun, faUser } from '@fortawesome/free-solid-svg-icons'
 import styles from './Header.module.css'
 
-export default function Header() {
+export default function Header({ fluid = false }) {
 	const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
 
 	useEffect(() => {
@@ -18,7 +18,7 @@ export default function Header() {
 
 	return (
 		<header className={styles.header}>
-			<nav className={styles.navbar}>
+			<nav className={`${styles.navbar} ${fluid ? styles.navbarFluid : ''}`}>
 				<Link to="/" className={styles.title}>ethereal</Link>
 				<ul className={styles.navbarNav}>
 					<li className={styles.navItem}>
@@ -27,7 +27,16 @@ export default function Header() {
 						</button>
 					</li>
 					<li className={styles.navItem}>
-						<Link to="/dashboard" className={styles.navLink}>Войти</Link>
+						{fluid ? (
+							<div className={styles.user}>
+								<span className={styles.avatar}>
+									<FontAwesomeIcon icon={faUser} />
+								</span>
+								<span className={styles.userName}>Гость</span>
+							</div>
+						) : (
+							<Link to="/dashboard" className={styles.navLink}>Войти</Link>
+						)}
 					</li>
 				</ul>
 			</nav>

@@ -7,7 +7,7 @@ import styles from './DashboardLayout.module.css'
 export default function DashboardLayout() {
 	return (
 		<div className="app">
-			<Header />
+			<Header fluid />
 			<div className={styles.body}>
 				<Sidebar />
 				<main className={styles.main}>
