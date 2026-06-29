@@ -9,8 +9,8 @@ class TaskBase(BaseModel):
     description: str = ""
     status: str = "Открыта"
     tags: list[str] = []
-    author_name: str
-    assignee_name: str | None = None
+    author_id: int
+    assignee_id: int | None = None
 
 
 class TaskCreate(TaskBase):
@@ -23,8 +23,8 @@ class TaskUpdate(BaseModel):
     description: str | None = None
     status: str | None = None
     tags: list[str] | None = None
-    author_name: str | None = None
-    assignee_name: str | None = None
+    author_id: int | None = None
+    assignee_id: int | None = None
 
 
 class TaskRead(TaskBase):
@@ -36,8 +36,34 @@ class TaskRead(TaskBase):
     updated_at: datetime
 
 
+class UserBase(BaseModel):
+    name: str
+    email: str
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+class UserUpdate(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    password: str | None = None
+
+
+class UserRead(UserBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime
+
+
 class BoardCreate(BaseModel):
     title: str
+
+
+class BoardUpdate(BaseModel):
+    title: str | None = None
 
 
 class BoardRead(BaseModel):

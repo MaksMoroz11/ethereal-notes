@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import crud
 from app.database import get_db
-from app.schemas import BoardCreate, BoardRead, BoardWithTasks
+from app.schemas import BoardCreate, BoardRead, BoardUpdate, BoardWithTasks
 
 router = APIRouter(prefix="/boards", tags=["boards"])
 
@@ -24,6 +24,14 @@ async def get_board(board_id: int, db: AsyncSession = Depends(get_db)):
     if board is None:
         raise HTTPException(status_code=404, detail="Доска не найдена")
     return board
+
+
+@router.patch("/{board_id}", response_model=BoardRead)
+async def update_board(board_id: int, data: BoardUpdate, db: AsyncSession = Depends(get_db)):
+    board = await crud.get_board(db, board_id)
+    if board is None:
+        raise HTTPException(status_code=404, detail="Доска не найдена")
+    return await crud.update_board(db, board, data)
 
 
 @router.delete("/{board_id}", status_code=status.HTTP_204_NO_CONTENT)
