@@ -58,6 +58,16 @@ class UserRead(UserBase):
     created_at: datetime
 
 
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserRead
+
+
 class BoardCreate(BaseModel):
     title: str
 
