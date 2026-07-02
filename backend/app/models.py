@@ -18,6 +18,18 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
 
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token: Mapped[str] = mapped_column(unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(default=func.now())
+    expires_at: Mapped[datetime] = mapped_column()
+
+    user: Mapped["User"] = relationship()
+
+
 class Board(Base):
     __tablename__ = "boards"
 

@@ -1,6 +1,10 @@
+import secrets
+
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+SESSION_TTL_HOURS = 24
 
 
 def hash_password(password: str) -> str:
@@ -9,3 +13,7 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, hashed: str) -> bool:
     return pwd_context.verify(password, hashed)
+
+
+def generate_token() -> str:
+    return secrets.token_urlsafe(32)

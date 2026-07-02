@@ -1,10 +1,12 @@
+from datetime import datetime, timedelta
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Board, Task, User
+from app.models import Board, Session, Task, User
 from app.schemas import BoardCreate, BoardUpdate, TaskCreate, TaskUpdate, UserCreate, UserUpdate
-from app.security import hash_password
+from app.security import SESSION_TTL_HOURS, generate_token, hash_password
 
 
 async def create_user(db: AsyncSession, data: UserCreate) -> User:
@@ -44,6 +46,30 @@ async def update_user(db: AsyncSession, user: User, data: UserUpdate) -> User:
 
 async def delete_user(db: AsyncSession, user: User) -> None:
     await db.delete(user)
+    await db.commit()
+
+
+async def create_session(db: AsyncSession, user: User) -> Session:
+    session = Session(
+        token=generate_token(),
+        user_id=user.id,
+        expires_at=datetime.utcnow() + timedelta(hours=SESSION_TTL_HOURS),
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
+async def get_session_by_token(db: AsyncSession, token: str) -> Session | None:
+    result = await db.execute(
+        select(Session).options(selectinload(Session.user)).where(Session.token == token)
+    )
+    return result.scalar_one_or_none()
+
+
+async def delete_session(db: AsyncSession, session: Session) -> None:
+    await db.delete(session)
     await db.commit()
 
 
@@ -90,8 +116,11 @@ async def create_task(db: AsyncSession, data: TaskCreate) -> Task:
     return task
 
 
-async def get_tasks(db: AsyncSession) -> list[Task]:
-    result = await db.execute(select(Task).order_by(Task.created_at.desc()))
+async def get_tasks(db: AsyncSession, board_id: int | None = None) -> list[Task]:
+    query = select(Task).order_by(Task.created_at.desc())
+    if board_id is not None:
+        query = query.where(Task.board_id == board_id)
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 
