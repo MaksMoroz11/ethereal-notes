@@ -12,8 +12,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column()
-    email: Mapped[str] = mapped_column(unique=True)
+    login: Mapped[str] = mapped_column(unique=True)
     password: Mapped[str] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
@@ -35,6 +34,7 @@ class Board(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column()
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
     tasks: Mapped[list["Task"]] = relationship(back_populates="board", cascade="all, delete-orphan")

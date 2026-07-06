@@ -21,10 +21,7 @@ export default function KanbanCard({ task, onOpen, onDelete, onMove }) {
 					<FontAwesomeIcon icon={faXmark} />
 				</button>
 			</div>
-			<p className={styles.title}>{task.desc}</p>
-			{task.author_name && (
-				<span className={styles.author}>{task.author_name}</span>
-			)}
+			<p className={styles.title}>{task.title}</p>
 			<select
 				className={styles.move}
 				value={task.status}

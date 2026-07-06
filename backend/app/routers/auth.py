@@ -27,9 +27,9 @@ async def get_current_user(
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
-    existing = await crud.get_user_by_email(db, data.email)
+    existing = await crud.get_user_by_login(db, data.login)
     if existing is not None:
-        raise HTTPException(status_code=400, detail="Email уже занят")
+        raise HTTPException(status_code=400, detail="Логин уже занят")
     user = await crud.create_user(db, data)
     session = await crud.create_session(db, user)
     return {"token": session.token, "user": user}
@@ -37,9 +37,9 @@ async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=AuthResponse)
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    user = await crud.get_user_by_email(db, data.email)
+    user = await crud.get_user_by_login(db, data.login)
     if user is None or not verify_password(data.password, user.password):
-        raise HTTPException(status_code=401, detail="Неверный email или пароль")
+        raise HTTPException(status_code=401, detail="Неверный логин или пароль")
     session = await crud.create_session(db, user)
     return {"token": session.token, "user": user}
 
