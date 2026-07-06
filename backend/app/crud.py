@@ -5,14 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import Board, Session, Task, User
-from app.schemas import BoardCreate, BoardUpdate, TaskCreate, TaskUpdate, UserCreate, UserUpdate
+from app.schemas import BoardUpdate, TaskCreate, TaskUpdate, UserCreate
 from app.security import SESSION_TTL_HOURS, generate_token, hash_password
 
 
 async def create_user(db: AsyncSession, data: UserCreate) -> User:
-    payload = data.model_dump()
-    payload["password"] = hash_password(payload["password"])
-    user = User(**payload)
+    user = User(login=data.login, password=hash_password(data.password))
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -28,25 +26,9 @@ async def get_user(db: AsyncSession, user_id: int) -> User | None:
     return await db.get(User, user_id)
 
 
-async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
-    result = await db.execute(select(User).where(User.email == email))
+async def get_user_by_login(db: AsyncSession, login: str) -> User | None:
+    result = await db.execute(select(User).where(User.login == login))
     return result.scalar_one_or_none()
-
-
-async def update_user(db: AsyncSession, user: User, data: UserUpdate) -> User:
-    payload = data.model_dump(exclude_unset=True)
-    if "password" in payload:
-        payload["password"] = hash_password(payload["password"])
-    for field, value in payload.items():
-        setattr(user, field, value)
-    await db.commit()
-    await db.refresh(user)
-    return user
-
-
-async def delete_user(db: AsyncSession, user: User) -> None:
-    await db.delete(user)
-    await db.commit()
 
 
 async def create_session(db: AsyncSession, user: User) -> Session:
@@ -73,17 +55,20 @@ async def delete_session(db: AsyncSession, session: Session) -> None:
     await db.commit()
 
 
-async def create_board(db: AsyncSession, data: BoardCreate) -> Board:
-    board = Board(**data.model_dump())
+async def create_board(db: AsyncSession, title: str, owner_id: int) -> Board:
+    board = Board(title=title, owner_id=owner_id)
     db.add(board)
     await db.commit()
-    await db.refresh(board)
+    await db.refresh(board, attribute_names=["tasks"])
     return board
 
 
-async def get_boards(db: AsyncSession) -> list[Board]:
+async def get_boards(db: AsyncSession, owner_id: int) -> list[Board]:
     result = await db.execute(
-        select(Board).options(selectinload(Board.tasks)).order_by(Board.created_at)
+        select(Board)
+        .options(selectinload(Board.tasks))
+        .where(Board.owner_id == owner_id)
+        .order_by(Board.created_at)
     )
     return list(result.scalars().all())
 
@@ -108,9 +93,11 @@ async def delete_board(db: AsyncSession, board: Board) -> None:
     await db.commit()
 
 
-async def create_task(db: AsyncSession, data: TaskCreate) -> Task:
-    task = Task(**data.model_dump())
+async def create_task(db: AsyncSession, data: TaskCreate, author_id: int) -> Task:
+    task = Task(**data.model_dump(), uid="", author_id=author_id)
     db.add(task)
+    await db.flush()
+    task.uid = str(1000 + task.id)
     await db.commit()
     await db.refresh(task)
     return task

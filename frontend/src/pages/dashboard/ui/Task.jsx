@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faXmark } from '@fortawesome/free-solid-svg-icons'
+import { useAuthStore } from '../../../shared/store/authStore'
 import styles from './Task.module.css'
 
 function getInitials(name) {
@@ -28,22 +29,23 @@ const STATUS_STYLES = {
 }
 
 export default function Task({ task, onClose, onChange }) {
+	const authorLogin = useAuthStore(state => state.user?.login ?? '')
 	const isBug = task.tags.includes('BUG')
 	const statusStyle = STATUS_STYLES[task.status] ?? STATUS_STYLES['Открыта']
 
-	const [desc, setDesc] = useState(task.desc)
-	const [additionalDesc, setAdditionalDesc] = useState(task.additional_desc)
+	const [desc, setDesc] = useState(task.title)
+	const [additionalDesc, setAdditionalDesc] = useState(task.description)
 	const [editingDesc, setEditingDesc] = useState(false)
 	const [editingAdditional, setEditingAdditional] = useState(false)
 
 	function saveDesc() {
 		setEditingDesc(false)
-		if (onChange && desc !== task.desc) onChange({ desc })
+		if (onChange && desc !== task.title) onChange({ title: desc })
 	}
 
 	function saveAdditional() {
 		setEditingAdditional(false)
-		if (onChange && additionalDesc !== task.additional_desc) onChange({ additional_desc: additionalDesc })
+		if (onChange && additionalDesc !== task.description) onChange({ description: additionalDesc })
 	}
 
 	return (
@@ -117,19 +119,10 @@ export default function Task({ task, onClose, onChange }) {
 					<div className={styles.person}>
 						<span className={styles.metaLabel}>автор</span>
 						<div className={styles.author}>
-							<div className={styles.avatar}>{getInitials(task.author_name)}</div>
-							<span className={styles.authorName}>{task.author_name}</span>
+							<div className={styles.avatar}>{getInitials(authorLogin)}</div>
+							<span className={styles.authorName}>{authorLogin}</span>
 						</div>
 					</div>
-					{task.assignee_name && (
-						<div className={styles.person}>
-							<span className={styles.metaLabel}>назначено</span>
-							<div className={styles.author}>
-								<div className={`${styles.avatar} ${styles.avatarAssignee}`}>{getInitials(task.assignee_name)}</div>
-								<span className={styles.authorName}>{task.assignee_name}</span>
-							</div>
-						</div>
-					)}
 				</div>
 
 				<div className={styles.meta}>

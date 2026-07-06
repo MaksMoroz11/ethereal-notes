@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faMoon, faSun, faUser } from '@fortawesome/free-solid-svg-icons'
+import { faMoon, faSun } from '@fortawesome/free-solid-svg-icons'
+import { useAuthStore } from '../../shared/store/authStore'
+import UserMenu from './UserMenu'
 import styles from './Header.module.css'
 
 export default function Header({ fluid = false }) {
+	const user = useAuthStore(state => state.user)
 	const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
 
 	useEffect(() => {
@@ -27,15 +30,10 @@ export default function Header({ fluid = false }) {
 						</button>
 					</li>
 					<li className={styles.navItem}>
-						{fluid ? (
-							<div className={styles.user}>
-								<span className={styles.avatar}>
-									<FontAwesomeIcon icon={faUser} />
-								</span>
-								<span className={styles.userName}>Гость</span>
-							</div>
+						{user ? (
+							<UserMenu login={user.login} />
 						) : (
-							<Link to="/dashboard" className={styles.navLink}>Войти</Link>
+							<Link to="/login" className={styles.navLink}>Войти</Link>
 						)}
 					</li>
 				</ul>
