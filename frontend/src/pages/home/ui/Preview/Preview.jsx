@@ -1,49 +1,39 @@
-import React from 'react'
-import styles from './Preview.module.css'
-
 export default function Preview() {
-    return (
-        <section className={styles.preview}>
-            <div className={styles.container}>
-                <div className={styles.previewBox}>
-                    <div className={styles.topbar}>
-                        <div className={styles.topbarTitle}></div>
-                        <div className={styles.topbarActions}>
-                            <div className={styles.topbarDot}></div>
-                            <div className={styles.topbarPill}></div>
-                        </div>
-                    </div>
-                    <div className={styles.body}>
-                        <div className={styles.sidebar}>
-                            <div className={styles.sidebarItem}></div>
-                            <div className={styles.sidebarItem}></div>
-                            <div className={styles.sidebarItemActive}></div>
-                        </div>
-                        <div className={styles.mainArea}>
-                            <div className={styles.headerRow}>
-                                <div className={styles.headerTitle}></div>
-                                <div className={styles.headerActions}></div>
-                            </div>
-                            <div className={styles.kanbanColumns}>
-                                <div className={styles.column}>
-                                    <div className={styles.cardItem}></div>
-                                    <div className={styles.cardItem}></div>
-                                </div>
-                                <div className={styles.column}>
-                                    <div className={styles.cardItem}></div>
-                                </div>
-                                <div className={styles.column}>
-                                    <div className={styles.cardItem}></div>
-                                    <div className={styles.cardItem}></div>
-                                </div>
-                                <div className={styles.column}>
-                                    <div className={styles.cardItem}></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    )
+	return (
+		<section className="px-6 py-20 md:px-10">
+			<div className="mx-auto max-w-6xl">
+				<div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+					<div className="flex items-center justify-between border-b border-border px-4 py-3">
+						<div className="h-3 w-28 rounded bg-muted" />
+						<div className="flex items-center gap-2">
+							<div className="h-2.5 w-2.5 rounded-full bg-primary/60" />
+							<div className="h-5 w-16 rounded-full bg-muted" />
+						</div>
+					</div>
+					<div className="flex min-h-72">
+						<div className="flex w-40 flex-col gap-2 border-r border-border bg-sidebar p-3">
+							<div className="h-8 rounded-md bg-muted" />
+							<div className="h-8 rounded-md bg-muted" />
+							<div className="h-8 rounded-md bg-accent" />
+						</div>
+						<div className="flex-1 p-4">
+							<div className="mb-4 flex items-center justify-between">
+								<div className="h-4 w-40 rounded bg-muted" />
+								<div className="h-8 w-24 rounded-md bg-primary/30" />
+							</div>
+							<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+								{[2, 1, 2, 1].map((count, i) => (
+									<div key={i} className="space-y-2 rounded-lg bg-muted p-2">
+										{Array.from({ length: count }).map((_, j) => (
+											<div key={j} className="h-14 rounded-md border border-border bg-card" />
+										))}
+									</div>
+								))}
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+	)
 }
