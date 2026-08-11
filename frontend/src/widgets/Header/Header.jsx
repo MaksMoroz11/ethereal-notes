@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faMoon, faSun } from '@fortawesome/free-solid-svg-icons'
-import { useAuthStore } from '../../shared/store/authStore'
+import { Moon, Sun } from 'lucide-react'
+import { useAuthStore } from '@/shared/store/authStore'
+import { Button } from '@/components/ui/button'
 import UserMenu from './UserMenu'
-import styles from './Header.module.css'
+import { cn } from '@/lib/utils'
 
 export default function Header({ fluid = false }) {
 	const user = useAuthStore(state => state.user)
@@ -15,28 +15,30 @@ export default function Header({ fluid = false }) {
 		localStorage.setItem('theme', theme)
 	}, [theme])
 
-	function toggleTheme() {
-		setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))
-	}
-
 	return (
-		<header className={styles.header}>
-			<nav className={`${styles.navbar} ${fluid ? styles.navbarFluid : ''}`}>
-				<Link to="/" className={styles.title}>ethereal</Link>
-				<ul className={styles.navbarNav}>
-					<li className={styles.navItem}>
-						<button className={styles.themeButton} onClick={toggleTheme} aria-label="Сменить тему">
-							<FontAwesomeIcon icon={theme === 'dark' ? faSun : faMoon} />
-						</button>
-					</li>
-					<li className={styles.navItem}>
-						{user ? (
-							<UserMenu login={user.login} />
-						) : (
-							<Link to="/login" className={styles.navLink}>Войти</Link>
-						)}
-					</li>
-				</ul>
+		<header className="sticky top-0 z-100 border-b border-border bg-card/95 px-6 py-4 shadow-sm backdrop-blur md:px-10">
+			<nav className={cn('flex items-center justify-between', fluid ? 'max-w-none' : 'mx-auto max-w-6xl')}>
+				<Link to="/" className="text-2xl font-bold tracking-tight text-foreground transition-opacity hover:opacity-85">
+					ethereal
+				</Link>
+				<div className="flex items-center gap-4">
+					<Button
+						variant="ghost"
+						size="icon"
+						aria-label="Сменить тему"
+						onClick={() => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))}
+						className="text-muted-foreground hover:rotate-[-8deg]"
+					>
+						{theme === 'dark' ? <Sun /> : <Moon />}
+					</Button>
+					{user ? (
+						<UserMenu login={user.login} />
+					) : (
+						<Button asChild variant="ghost">
+							<Link to="/login">Войти</Link>
+						</Button>
+					)}
+				</div>
 			</nav>
 		</header>
 	)

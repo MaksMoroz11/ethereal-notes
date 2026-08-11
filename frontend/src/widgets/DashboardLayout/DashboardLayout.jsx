@@ -1,9 +1,8 @@
-import React, { useEffect } from 'react'
+import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import Header from '../Header/Header'
 import Sidebar from '../Sidebar/Sidebar'
-import { useBoardsStore } from '../../shared/store/boardsStore'
-import styles from './DashboardLayout.module.css'
+import { useBoardsStore } from '@/shared/store/boardsStore'
 
 export default function DashboardLayout() {
 	const loadBoards = useBoardsStore(state => state.loadBoards)
@@ -15,9 +14,9 @@ export default function DashboardLayout() {
 	return (
 		<div className="app">
 			<Header fluid />
-			<div className={styles.body}>
+			<div className="flex min-h-0 flex-1">
 				<Sidebar />
-				<main className={styles.main}>
+				<main className="flex-1 overflow-y-auto">
 					<Outlet />
 				</main>
 			</div>

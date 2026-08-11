@@ -6,6 +6,7 @@ import RequireAuth from './RequireAuth'
 import Home from '../pages/home/index'
 import Login from '../pages/login/index'
 import Dashboard from '../pages/dashboard/index'
+import Documents from '../pages/documents/index'
 import NotFound from '../pages/not-found/index'
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
 					}
 				>
 					<Route path="/dashboard" element={<Dashboard />} />
+					<Route path="/documents" element={<Documents />} />
 				</Route>
 				<Route path="*" element={<NotFound />} />
 			</Routes>

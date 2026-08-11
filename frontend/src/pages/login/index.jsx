@@ -1,7 +1,9 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../../shared/store/authStore'
-import styles from './index.module.css'
+import { useAuthStore } from '@/shared/store/authStore'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 const LOGIN_PATTERN = /^[A-Za-z0-9_]+$/
 
@@ -31,11 +33,8 @@ export default function Login() {
 
 		setLoading(true)
 		try {
-			if (mode === 'register') {
-				await register(loginValue, password)
-			} else {
-				await login(loginValue, password)
-			}
+			if (mode === 'register') await register(loginValue, password)
+			else await login(loginValue, password)
 			navigate('/dashboard')
 		} catch (err) {
 			setError(err.message)
@@ -45,49 +44,53 @@ export default function Login() {
 	}
 
 	return (
-		<section className={styles.page}>
-			<div className={styles.card}>
-				<h1 className={styles.title}>{mode === 'login' ? 'Вход' : 'Регистрация'}</h1>
+		<section className="flex min-h-[calc(100vh-160px)] items-center justify-center px-4 py-12 animate-in fade-in duration-300">
+			<div className="w-full max-w-md rounded-xl border border-border border-l-[3px] border-l-primary bg-card p-8 shadow-lg">
+				<h1 className="mb-6 text-2xl font-bold text-foreground">
+					{mode === 'login' ? 'Вход' : 'Регистрация'}
+				</h1>
 
-				<form className={styles.form} onSubmit={submit}>
-					<label className={styles.label}>
-						Логин
-						<input
-							className={styles.input}
+				<form className="flex flex-col gap-4" onSubmit={submit}>
+					<div className="space-y-2">
+						<Label htmlFor="login">Логин</Label>
+						<Input
+							id="login"
 							value={loginValue}
 							autoFocus
 							onChange={e => setLoginValue(e.target.value)}
 							placeholder="latin_only"
 						/>
-					</label>
+					</div>
 
-					<label className={styles.label}>
-						Пароль
-						<input
-							className={styles.input}
+					<div className="space-y-2">
+						<Label htmlFor="password">Пароль</Label>
+						<Input
+							id="password"
 							type="password"
 							value={password}
 							onChange={e => setPassword(e.target.value)}
 							placeholder="••••••"
 						/>
-					</label>
+					</div>
 
-					{error && <p className={styles.error}>{error}</p>}
+					{error && <p className="text-sm text-destructive">{error}</p>}
 
-					<button type="submit" className={styles.submit} disabled={loading}>
+					<Button type="submit" disabled={loading} className="mt-2">
 						{loading ? '…' : mode === 'login' ? 'Войти' : 'Создать аккаунт'}
-					</button>
+					</Button>
 				</form>
 
-				<button
-					className={styles.switch}
+				<Button
+					type="button"
+					variant="link"
+					className="mt-4 px-0"
 					onClick={() => {
 						setMode(mode === 'login' ? 'register' : 'login')
 						setError('')
 					}}
 				>
 					{mode === 'login' ? 'Нет аккаунта? Регистрация' : 'Уже есть аккаунт? Войти'}
-				</button>
+				</Button>
 			</div>
 		</section>
 	)

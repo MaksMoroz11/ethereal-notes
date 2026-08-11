@@ -1,60 +1,54 @@
-import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faUser, faRightFromBracket, faTableColumns } from '@fortawesome/free-solid-svg-icons'
-import { useAuthStore } from '../../shared/store/authStore'
-import styles from './UserMenu.module.css'
+import { LayoutGrid, FileText, LogOut, User } from 'lucide-react'
+import { useAuthStore } from '@/shared/store/authStore'
+import { Button } from '@/components/ui/button'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export default function UserMenu({ login }) {
 	const navigate = useNavigate()
 	const logout = useAuthStore(state => state.logout)
-	const [open, setOpen] = useState(false)
-	const ref = useRef(null)
-
-	useEffect(() => {
-		function onClickOutside(e) {
-			if (ref.current && !ref.current.contains(e.target)) setOpen(false)
-		}
-		document.addEventListener('mousedown', onClickOutside)
-		return () => document.removeEventListener('mousedown', onClickOutside)
-	}, [])
-
-	function goDashboard() {
-		setOpen(false)
-		navigate('/dashboard')
-	}
 
 	function handleLogout() {
-		setOpen(false)
 		logout()
 		navigate('/login')
 	}
 
 	return (
-		<div className={styles.wrap} ref={ref}>
-			<button
-				className={`${styles.trigger} ${open ? styles.triggerOpen : ''}`}
-				onClick={() => setOpen(prev => !prev)}
-			>
-				<span className={styles.avatar}>
-					<FontAwesomeIcon icon={faUser} />
-				</span>
-				<span className={styles.name}>{login}</span>
-			</button>
-
-			{open && (
-				<div className={styles.menu}>
-					<span className={styles.menuName}>{login}</span>
-					<button className={styles.item} onClick={goDashboard}>
-						<FontAwesomeIcon icon={faTableColumns} />
-						Мои доски
-					</button>
-					<button className={styles.logout} onClick={handleLogout}>
-						<FontAwesomeIcon icon={faRightFromBracket} />
-						Выйти
-					</button>
-				</div>
-			)}
-		</div>
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button variant="ghost" className="group h-auto gap-0 px-1 py-1 hover:bg-transparent">
+					<span className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-accent text-muted-foreground transition-colors group-hover:text-foreground group-data-[state=open]:text-foreground">
+						<User className="h-4 w-4" />
+					</span>
+					<span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-300 group-hover:ml-2.5 group-hover:max-w-48 group-hover:opacity-100 group-data-[state=open]:ml-2.5 group-data-[state=open]:max-w-48 group-data-[state=open]:opacity-100">
+						{login}
+					</span>
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="w-44">
+				<DropdownMenuLabel>{login}</DropdownMenuLabel>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem onClick={() => navigate('/dashboard')}>
+					<LayoutGrid />
+					Мои доски
+				</DropdownMenuItem>
+				<DropdownMenuItem onClick={() => navigate('/documents')}>
+					<FileText />
+					Документы
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleLogout}>
+					<LogOut />
+					Выйти
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	)
 }
