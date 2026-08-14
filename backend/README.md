@@ -13,6 +13,12 @@
 - SQLAlchemy (async) - работа с базой через asyncpg
 - Pydantic - проверка данных на входе и выходе
 
+## Схема БД
+
+![Схема базы](../docs/db-schema.png)
+
+Интерактивно: https://dbdiagram.io/d/ethereal-notes-6a7eb27ae093539a9eb50c66
+
 ## Структура
 
 - app/main.py - точка входа, тут собирается приложение и при старте создаются таблицы
