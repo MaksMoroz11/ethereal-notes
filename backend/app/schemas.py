@@ -87,3 +87,40 @@ class BoardRead(BaseModel):
 
 class BoardWithTasks(BoardRead):
     tasks: list[TaskRead] = []
+
+
+class DocumentCreate(BaseModel):
+    title: str
+
+
+class DocumentUpdate(BaseModel):
+    title: str | None = None
+    content: str | None = None
+
+
+class DocumentVersionCreate(BaseModel):
+    title: str
+    content: str = ""
+
+
+class DocumentVersionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    content: str
+    author_login: str
+    created_at: datetime
+
+
+class DocumentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    content: str
+    author_login: str
+    updated_by: str
+    created_at: datetime
+    updated_at: datetime
+    versions: list[DocumentVersionRead] = []

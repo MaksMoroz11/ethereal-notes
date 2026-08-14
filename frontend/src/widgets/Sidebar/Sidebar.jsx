@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { FileText, LayoutGrid, Plus, Trash2 } from 'lucide-react'
-import { useAuthStore } from '@/shared/store/authStore'
 import { useBoardsStore } from '@/shared/store/boardsStore'
 import { useDocumentsStore } from '@/shared/store/documentsStore'
 import ConfirmDialog from '@/shared/ui/ConfirmDialog/ConfirmDialog'
@@ -13,7 +12,6 @@ import { cn } from '@/lib/utils'
 export default function Sidebar() {
 	const location = useLocation()
 	const isDocs = location.pathname.startsWith('/documents')
-	const userLogin = useAuthStore(state => state.user?.login ?? '')
 
 	const boards = useBoardsStore(state => state.boards)
 	const activeBoardId = useBoardsStore(state => state.activeId)
@@ -41,7 +39,7 @@ export default function Sidebar() {
 		e.preventDefault()
 		const value = title.trim()
 		if (!value) return
-		if (isDocs) createDocument(value, userLogin)
+		if (isDocs) createDocument(value)
 		else createBoard(value)
 		setTitle('')
 		setAdding(false)

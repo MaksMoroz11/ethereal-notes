@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Clock3, Save } from 'lucide-react'
-import { useAuthStore } from '@/shared/store/authStore'
 import { useDocumentsStore } from '@/shared/store/documentsStore'
 import ConfirmDialog from '@/shared/ui/ConfirmDialog/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -19,7 +18,6 @@ function formatDate(iso) {
 }
 
 export default function Documents() {
-	const userLogin = useAuthStore(state => state.user?.login ?? '')
 	const documents = useDocumentsStore(state => state.documents)
 	const activeId = useDocumentsStore(state => state.activeId)
 	const updateDocument = useDocumentsStore(state => state.updateDocument)
@@ -67,7 +65,7 @@ export default function Documents() {
 	function commitTitle() {
 		const value = title.trim() || 'Без названия'
 		setTitle(value)
-		if (value !== doc.title) updateDocument(doc.id, { title: value }, userLogin)
+		if (value !== doc.title) updateDocument(doc.id, { title: value })
 	}
 
 	function handleContentBlur() {
@@ -77,12 +75,12 @@ export default function Documents() {
 		const latest = doc.versions[0]
 		if (latest && latest.title === nextTitle && latest.content === content) {
 			if (nextTitle !== doc.title || content !== doc.content) {
-				updateDocument(doc.id, { title: nextTitle, content }, userLogin)
+				updateDocument(doc.id, { title: nextTitle, content })
 			}
 			return
 		}
 		if (nextTitle === doc.title && content === doc.content) return
-		saveVersion(doc.id, { title: nextTitle, content, author_login: userLogin })
+		saveVersion(doc.id, { title: nextTitle, content })
 	}
 
 	function handleSaveVersion() {
@@ -90,12 +88,12 @@ export default function Documents() {
 		setTitle(nextTitle)
 		const latest = doc.versions[0]
 		if (latest && latest.title === nextTitle && latest.content === content) return
-		saveVersion(doc.id, { title: nextTitle, content, author_login: userLogin })
+		saveVersion(doc.id, { title: nextTitle, content })
 	}
 
 	function confirmRestore() {
 		if (!confirmVersion) return
-		restoreVersion(doc.id, confirmVersion.id, userLogin)
+		restoreVersion(doc.id, confirmVersion.id)
 		setTitle(confirmVersion.title)
 		setContent(confirmVersion.content)
 		setPreviewId(null)

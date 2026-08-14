@@ -3,13 +3,16 @@ import { Outlet } from 'react-router-dom'
 import Header from '../Header/Header'
 import Sidebar from '../Sidebar/Sidebar'
 import { useBoardsStore } from '@/shared/store/boardsStore'
+import { useDocumentsStore } from '@/shared/store/documentsStore'
 
 export default function DashboardLayout() {
 	const loadBoards = useBoardsStore(state => state.loadBoards)
+	const loadDocuments = useDocumentsStore(state => state.loadDocuments)
 
 	useEffect(() => {
 		loadBoards()
-	}, [loadBoards])
+		loadDocuments()
+	}, [loadBoards, loadDocuments])
 
 	return (
 		<div className="app">
