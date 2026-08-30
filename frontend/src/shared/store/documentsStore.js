@@ -1,15 +1,21 @@
 import { create } from 'zustand'
 import { api } from '../api/client'
+import { useWorkspaceStore } from './workspaceStore'
 
 export const useDocumentsStore = create((set, get) => ({
 	documents: [],
 	activeId: null,
 	loading: false,
 
-	loadDocuments: async () => {
+	loadDocuments: async workspaceId => {
+		const id = workspaceId ?? useWorkspaceStore.getState().activeId
 		set({ loading: true })
 		try {
-			const documents = await api('/documents')
+			if (!id) {
+				set({ documents: [], activeId: null })
+				return
+			}
+			const documents = await api(`/documents?workspace_id=${id}`)
 			set(state => ({
 				documents,
 				activeId: documents.some(doc => doc.id === state.activeId)
@@ -22,7 +28,9 @@ export const useDocumentsStore = create((set, get) => ({
 	},
 
 	createDocument: async title => {
-		const document = await api('/documents', { method: 'POST', body: { title } })
+		const workspaceId = useWorkspaceStore.getState().activeId
+		if (!workspaceId) return
+		const document = await api('/documents', { method: 'POST', body: { title, workspace_id: workspaceId } })
 		set(state => ({
 			documents: [document, ...state.documents],
 			activeId: document.id,

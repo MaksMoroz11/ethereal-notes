@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Text, func
+from sqlalchemy import ForeignKey, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -29,12 +29,42 @@ class Session(Base):
     user: Mapped["User"] = relationship()
 
 
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column()
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(default=func.now())
+
+    owner: Mapped["User"] = relationship()
+    members: Mapped[list["WorkspaceMember"]] = relationship(
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+    )
+
+
+class WorkspaceMember(Base):
+    __tablename__ = "workspace_members"
+    __table_args__ = (UniqueConstraint("workspace_id", "user_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    role: Mapped[str] = mapped_column(default="member")
+    created_at: Mapped[datetime] = mapped_column(default=func.now())
+
+    workspace: Mapped["Workspace"] = relationship(back_populates="members")
+    user: Mapped["User"] = relationship()
+
+
 class Board(Base):
     __tablename__ = "boards"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column()
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"))
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
     tasks: Mapped[list["Task"]] = relationship(back_populates="board", cascade="all, delete-orphan")
@@ -67,6 +97,7 @@ class Document(Base):
     title: Mapped[str] = mapped_column()
     content: Mapped[str] = mapped_column(Text, default="")
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"))
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
@@ -106,3 +137,22 @@ class DocumentVersion(Base):
     @property
     def author_login(self) -> str:
         return self.author.login if self.author is not None else ""
+
+
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    action: Mapped[str] = mapped_column()
+    entity_type: Mapped[str] = mapped_column()
+    entity_id: Mapped[int | None] = mapped_column(nullable=True)
+    title: Mapped[str] = mapped_column(default="")
+    created_at: Mapped[datetime] = mapped_column(default=func.now())
+
+    user: Mapped["User"] = relationship()
+
+    @property
+    def user_login(self) -> str:
+        return self.user.login if self.user is not None else ""

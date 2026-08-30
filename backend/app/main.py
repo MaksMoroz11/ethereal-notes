@@ -3,8 +3,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import settings
 from app.database import Base, engine
-from app.routers import auth, boards, documents, tasks, users
+from app.routers import auth, boards, documents, tasks, users, workspaces
 
 
 @asynccontextmanager
@@ -18,7 +19,7 @@ app = FastAPI(title="Ethereal API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -26,6 +27,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(workspaces.router)
 app.include_router(boards.router)
 app.include_router(tasks.router)
 app.include_router(documents.router)

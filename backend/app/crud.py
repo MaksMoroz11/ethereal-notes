@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Board, Document, DocumentVersion, Session, Task, User
+from app.models import ActivityLog, Board, Document, DocumentVersion, Session, Task, User, Workspace, WorkspaceMember
 from app.schemas import BoardUpdate, DocumentUpdate, TaskCreate, TaskUpdate, UserCreate
 from app.security import SESSION_TTL_HOURS, generate_token, hash_password
 
@@ -12,6 +12,11 @@ from app.security import SESSION_TTL_HOURS, generate_token, hash_password
 async def create_user(db: AsyncSession, data: UserCreate) -> User:
     user = User(login=data.login, password=hash_password(data.password))
     db.add(user)
+    await db.flush()
+    workspace = Workspace(name=f"Пространство {user.login}", owner_id=user.id)
+    db.add(workspace)
+    await db.flush()
+    db.add(WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role="owner"))
     await db.commit()
     await db.refresh(user)
     return user
@@ -55,19 +60,105 @@ async def delete_session(db: AsyncSession, session: Session) -> None:
     await db.commit()
 
 
-async def create_board(db: AsyncSession, title: str, owner_id: int) -> Board:
-    board = Board(title=title, owner_id=owner_id)
+_workspace_load = (
+    selectinload(Workspace.owner),
+    selectinload(Workspace.members).selectinload(WorkspaceMember.user),
+)
+
+
+async def get_workspaces(db: AsyncSession, user_id: int) -> list[Workspace]:
+    result = await db.execute(
+        select(Workspace)
+        .options(*_workspace_load)
+        .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+        .where(WorkspaceMember.user_id == user_id)
+        .order_by(Workspace.created_at)
+    )
+    return list(result.scalars().unique().all())
+
+
+async def get_workspace(db: AsyncSession, workspace_id: int) -> Workspace | None:
+    result = await db.execute(
+        select(Workspace).options(*_workspace_load).where(Workspace.id == workspace_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_workspace(db: AsyncSession, name: str, owner_id: int) -> Workspace:
+    workspace = Workspace(name=name, owner_id=owner_id)
+    db.add(workspace)
+    await db.flush()
+    db.add(WorkspaceMember(workspace_id=workspace.id, user_id=owner_id, role="owner"))
+    await db.commit()
+    return await get_workspace(db, workspace.id)
+
+
+async def update_workspace(db: AsyncSession, workspace: Workspace, name: str) -> Workspace:
+    workspace.name = name
+    await db.commit()
+    return await get_workspace(db, workspace.id)
+
+
+async def delete_workspace(db: AsyncSession, workspace_id: int) -> None:
+    document_ids = select(Document.id).where(Document.workspace_id == workspace_id)
+    board_ids = select(Board.id).where(Board.workspace_id == workspace_id)
+    await db.execute(delete(ActivityLog).where(ActivityLog.workspace_id == workspace_id))
+    await db.execute(delete(DocumentVersion).where(DocumentVersion.document_id.in_(document_ids)))
+    await db.execute(delete(Document).where(Document.workspace_id == workspace_id))
+    await db.execute(delete(Task).where(Task.board_id.in_(board_ids)))
+    await db.execute(delete(Board).where(Board.workspace_id == workspace_id))
+    await db.execute(delete(WorkspaceMember).where(WorkspaceMember.workspace_id == workspace_id))
+    await db.execute(delete(Workspace).where(Workspace.id == workspace_id))
+    await db.commit()
+
+
+async def get_membership(
+    db: AsyncSession, workspace_id: int, user_id: int
+) -> WorkspaceMember | None:
+    result = await db.execute(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == user_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def add_workspace_member(
+    db: AsyncSession, workspace_id: int, user_id: int, role: str = "member"
+) -> WorkspaceMember:
+    member = WorkspaceMember(workspace_id=workspace_id, user_id=user_id, role=role)
+    db.add(member)
+    await db.commit()
+    return member
+
+
+async def delete_workspace_member(db: AsyncSession, member: WorkspaceMember) -> None:
+    await db.delete(member)
+    await db.commit()
+
+
+async def update_workspace_member_role(
+    db: AsyncSession, member: WorkspaceMember, role: str
+) -> WorkspaceMember:
+    member.role = role
+    await db.commit()
+    return member
+
+
+async def create_board(db: AsyncSession, title: str, owner_id: int, workspace_id: int) -> Board:
+    board = Board(title=title, owner_id=owner_id, workspace_id=workspace_id)
     db.add(board)
     await db.commit()
     await db.refresh(board, attribute_names=["tasks"])
     return board
 
 
-async def get_boards(db: AsyncSession, owner_id: int) -> list[Board]:
+async def get_boards(db: AsyncSession, workspace_id: int) -> list[Board]:
     result = await db.execute(
         select(Board)
         .options(selectinload(Board.tasks))
-        .where(Board.owner_id == owner_id)
+        .where(Board.workspace_id == workspace_id)
         .order_by(Board.created_at)
     )
     return list(result.scalars().all())
@@ -134,18 +225,18 @@ _document_load = (
 )
 
 
-async def create_document(db: AsyncSession, title: str, owner_id: int) -> Document:
-    document = Document(title=title, content="", owner_id=owner_id)
+async def create_document(db: AsyncSession, title: str, owner_id: int, workspace_id: int) -> Document:
+    document = Document(title=title, content="", owner_id=owner_id, workspace_id=workspace_id)
     db.add(document)
     await db.commit()
     return await get_document(db, document.id)
 
 
-async def get_documents(db: AsyncSession, owner_id: int) -> list[Document]:
+async def get_documents(db: AsyncSession, workspace_id: int) -> list[Document]:
     result = await db.execute(
         select(Document)
         .options(*_document_load)
-        .where(Document.owner_id == owner_id)
+        .where(Document.workspace_id == workspace_id)
         .order_by(Document.updated_at.desc())
     )
     return list(result.scalars().all())
@@ -153,7 +244,10 @@ async def get_documents(db: AsyncSession, owner_id: int) -> list[Document]:
 
 async def get_document(db: AsyncSession, document_id: int) -> Document | None:
     result = await db.execute(
-        select(Document).options(*_document_load).where(Document.id == document_id)
+        select(Document)
+        .options(*_document_load)
+        .where(Document.id == document_id)
+        .execution_options(populate_existing=True)
     )
     return result.scalar_one_or_none()
 
@@ -216,3 +310,35 @@ async def restore_document_version(
     document.updated_at = datetime.utcnow()
     await db.commit()
     return await get_document(db, document.id)
+
+
+async def log_activity(
+    db: AsyncSession,
+    workspace_id: int,
+    user_id: int,
+    action: str,
+    entity_type: str,
+    entity_id: int | None,
+    title: str,
+) -> None:
+    db.add(
+        ActivityLog(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            title=title,
+        )
+    )
+    await db.commit()
+
+
+async def get_activity(db: AsyncSession, workspace_id: int) -> list[ActivityLog]:
+    result = await db.execute(
+        select(ActivityLog)
+        .options(selectinload(ActivityLog.user))
+        .where(ActivityLog.workspace_id == workspace_id)
+        .order_by(ActivityLog.created_at.desc())
+    )
+    return list(result.scalars().all())

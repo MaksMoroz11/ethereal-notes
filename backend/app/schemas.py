@@ -1,7 +1,8 @@
 import re
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 LOGIN_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 
@@ -69,8 +70,50 @@ class AuthResponse(BaseModel):
     user: UserRead
 
 
+class MemberInvite(BaseModel):
+    login: str
+
+
+class MemberRoleUpdate(BaseModel):
+    role: Literal["admin", "member"]
+
+
+class WorkspaceMemberRead(BaseModel):
+    user_id: int
+    login: str
+    role: str
+    created_at: datetime
+
+
+class WorkspaceRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    owner_id: int
+    role: str
+    created_at: datetime
+
+
+class WorkspaceCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Название не может быть пустым")
+        return value
+
+
+class WorkspaceUpdate(WorkspaceCreate):
+    pass
+
+
 class BoardCreate(BaseModel):
     title: str
+    workspace_id: int
 
 
 class BoardUpdate(BaseModel):
@@ -91,6 +134,7 @@ class BoardWithTasks(BoardRead):
 
 class DocumentCreate(BaseModel):
     title: str
+    workspace_id: int
 
 
 class DocumentUpdate(BaseModel):
@@ -124,3 +168,15 @@ class DocumentRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     versions: list[DocumentVersionRead] = []
+
+
+class ActivityRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    action: str
+    entity_type: str
+    entity_id: int | None
+    title: str
+    user_login: str
+    created_at: datetime
