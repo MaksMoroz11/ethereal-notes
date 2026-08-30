@@ -1,153 +1,80 @@
 import { create } from 'zustand'
-
-const STORAGE_KEY = 'ethereal-documents'
-
-function uid() {
-	return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-function load() {
-	try {
-		const raw = localStorage.getItem(STORAGE_KEY)
-		if (!raw) return { documents: [], activeId: null }
-		const data = JSON.parse(raw)
-		return {
-			documents: Array.isArray(data.documents) ? data.documents : [],
-			activeId: data.activeId ?? null,
-		}
-	} catch {
-		return { documents: [], activeId: null }
-	}
-}
-
-function persist(state) {
-	localStorage.setItem(
-		STORAGE_KEY,
-		JSON.stringify({ documents: state.documents, activeId: state.activeId })
-	)
-}
-
-const initial = load()
+import { api } from '../api/client'
+import { useWorkspaceStore } from './workspaceStore'
 
 export const useDocumentsStore = create((set, get) => ({
-	documents: initial.documents,
-	activeId: initial.activeId,
+	documents: [],
+	activeId: null,
+	loading: false,
 
-	createDocument: (title, authorLogin = '') => {
-		const now = new Date().toISOString()
-		const login = authorLogin || ''
-		const doc = {
-			id: uid(),
-			title: title.trim() || 'Без названия',
-			content: '',
-			author_login: login,
-			updated_by: login,
-			created_at: now,
-			updated_at: now,
-			versions: [],
+	loadDocuments: async workspaceId => {
+		const id = workspaceId ?? useWorkspaceStore.getState().activeId
+		set({ loading: true })
+		try {
+			if (!id) {
+				set({ documents: [], activeId: null })
+				return
+			}
+			const documents = await api(`/documents?workspace_id=${id}`)
+			set(state => ({
+				documents,
+				activeId: documents.some(doc => doc.id === state.activeId)
+					? state.activeId
+					: documents[0]?.id ?? null,
+			}))
+		} finally {
+			set({ loading: false })
 		}
-		set(state => {
-			const next = { documents: [doc, ...state.documents], activeId: doc.id }
-			persist(next)
-			return next
-		})
 	},
 
-	selectDocument: id => {
-		set(state => {
-			const next = { ...state, activeId: id }
-			persist(next)
-			return { activeId: id }
-		})
+	createDocument: async title => {
+		const workspaceId = useWorkspaceStore.getState().activeId
+		if (!workspaceId) return
+		const document = await api('/documents', { method: 'POST', body: { title, workspace_id: workspaceId } })
+		set(state => ({
+			documents: [document, ...state.documents],
+			activeId: document.id,
+		}))
 	},
 
-	deleteDocument: id => {
+	selectDocument: id => set({ activeId: id }),
+
+	deleteDocument: async id => {
+		await api(`/documents/${id}`, { method: 'DELETE' })
 		set(state => {
 			const documents = state.documents.filter(doc => doc.id !== id)
-			const next = {
+			return {
 				documents,
 				activeId: state.activeId === id ? documents[0]?.id ?? null : state.activeId,
 			}
-			persist(next)
-			return next
 		})
 	},
 
-	updateDocument: (id, changes, updatedBy = '') => {
-		const now = new Date().toISOString()
-		set(state => {
-			const documents = state.documents.map(doc =>
-				doc.id === id
-					? {
-							...doc,
-							...changes,
-							updated_at: now,
-							updated_by: updatedBy || doc.updated_by || '',
-						}
-					: doc
-			)
-			const next = { ...state, documents }
-			persist(next)
-			return { documents }
-		})
+	updateDocument: async (id, changes) => {
+		const document = await api(`/documents/${id}`, { method: 'PATCH', body: changes })
+		set(state => ({
+			documents: state.documents.map(doc => (doc.id === id ? document : doc)),
+		}))
 	},
 
-	saveVersion: (id, snapshot) => {
-		const doc = get().documents.find(d => d.id === id)
-		if (!doc) return
-		const now = new Date().toISOString()
-		const title = snapshot?.title ?? doc.title
-		const content = snapshot?.content ?? doc.content
-		const authorLogin = snapshot?.author_login || ''
-		const version = {
-			id: uid(),
-			title,
-			content,
-			author_login: authorLogin,
-			created_at: now,
-		}
-		set(state => {
-			const documents = state.documents.map(d =>
-				d.id === id
-					? {
-							...d,
-							title,
-							content,
-							versions: [version, ...d.versions],
-							updated_at: now,
-							updated_by: authorLogin || d.updated_by || '',
-						}
-					: d
-			)
-			const next = { ...state, documents }
-			persist(next)
-			return { documents }
+	saveVersion: async (id, snapshot) => {
+		const current = get().documents.find(doc => doc.id === id)
+		const document = await api(`/documents/${id}/versions`, {
+			method: 'POST',
+			body: {
+				title: snapshot?.title ?? current?.title,
+				content: snapshot?.content ?? current?.content,
+			},
 		})
+		set(state => ({
+			documents: state.documents.map(doc => (doc.id === id ? document : doc)),
+		}))
 	},
 
-	restoreVersion: (docId, versionId, updatedBy = '') => {
-		const doc = get().documents.find(d => d.id === docId)
-		if (!doc) return
-		const index = doc.versions.findIndex(v => v.id === versionId)
-		if (index < 0) return
-		const version = doc.versions[index]
-		const now = new Date().toISOString()
-		set(state => {
-			const documents = state.documents.map(d =>
-				d.id === docId
-					? {
-							...d,
-							title: version.title,
-							content: version.content,
-							updated_at: now,
-							updated_by: updatedBy || d.updated_by || '',
-							versions: d.versions.slice(index),
-						}
-					: d
-			)
-			const next = { ...state, documents }
-			persist(next)
-			return { documents }
-		})
+	restoreVersion: async (docId, versionId) => {
+		const document = await api(`/documents/${docId}/restore/${versionId}`, { method: 'POST' })
+		set(state => ({
+			documents: state.documents.map(doc => (doc.id === docId ? document : doc)),
+		}))
 	},
 }))

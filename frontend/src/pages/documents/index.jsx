@@ -1,12 +1,19 @@
-import { useEffect, useState } from 'react'
-import { Clock3, Save } from 'lucide-react'
-import { useAuthStore } from '@/shared/store/authStore'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Clock3 } from 'lucide-react'
 import { useDocumentsStore } from '@/shared/store/documentsStore'
 import ConfirmDialog from '@/shared/ui/ConfirmDialog/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import DocumentEditor from './ui/DocumentEditor'
+
+const SAVE_DELAY = 2500
+
+function normalizeContent(html) {
+	if (!html) return ''
+	const text = html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim()
+	return text ? html : ''
+}
 
 function formatDate(iso) {
 	return new Date(iso).toLocaleString('ru-RU', {
@@ -18,8 +25,13 @@ function formatDate(iso) {
 	})
 }
 
+function sameAsLatest(versions, storedTitle, storedContent, title, content) {
+	const latest = versions[0]
+	if (latest) return latest.title === title && latest.content === content
+	return title === storedTitle && content === storedContent
+}
+
 export default function Documents() {
-	const userLogin = useAuthStore(state => state.user?.login ?? '')
 	const documents = useDocumentsStore(state => state.documents)
 	const activeId = useDocumentsStore(state => state.activeId)
 	const updateDocument = useDocumentsStore(state => state.updateDocument)
@@ -31,20 +43,102 @@ export default function Documents() {
 	const [content, setContent] = useState('')
 	const [previewId, setPreviewId] = useState(null)
 	const [confirmId, setConfirmId] = useState(null)
+	const [saveStatus, setSaveStatus] = useState('saved')
+
+	const syncedIdRef = useRef(null)
+	const draftsRef = useRef(new Map())
+	const timerRef = useRef(null)
+	const savingRef = useRef(false)
+	const previewIdRef = useRef(previewId)
+	previewIdRef.current = previewId
+
+	if (doc && syncedIdRef.current === doc.id && !previewId) {
+		draftsRef.current.set(doc.id, {
+			title,
+			content,
+			versions: doc.versions,
+			storedTitle: doc.title,
+			storedContent: doc.content,
+		})
+	}
+
+	const persistDraft = useCallback(async docId => {
+		if (timerRef.current) {
+			clearTimeout(timerRef.current)
+			timerRef.current = null
+		}
+		if (previewIdRef.current || savingRef.current) return
+		const draft = draftsRef.current.get(docId)
+		if (!draft) return
+		const nextTitle = draft.title.trim() || 'Без названия'
+		const nextContent = normalizeContent(draft.content)
+		if (sameAsLatest(draft.versions, draft.storedTitle, draft.storedContent, nextTitle, nextContent)) {
+			if (nextTitle !== draft.storedTitle || nextContent !== draft.storedContent) {
+				savingRef.current = true
+				setSaveStatus('saving')
+				try {
+					await updateDocument(docId, { title: nextTitle, content: nextContent })
+					setSaveStatus('saved')
+				} finally {
+					savingRef.current = false
+				}
+			} else {
+				setSaveStatus('saved')
+			}
+			return
+		}
+		savingRef.current = true
+		setSaveStatus('saving')
+		try {
+			await saveVersion(docId, { title: nextTitle, content: nextContent })
+			setSaveStatus('saved')
+		} finally {
+			savingRef.current = false
+		}
+	}, [saveVersion, updateDocument])
 
 	useEffect(() => {
 		if (!doc) {
+			syncedIdRef.current = null
 			setTitle('')
 			setContent('')
 			setPreviewId(null)
 			setConfirmId(null)
+			setSaveStatus('saved')
 			return
 		}
 		setTitle(doc.title)
 		setContent(doc.content)
 		setPreviewId(null)
 		setConfirmId(null)
-	}, [activeId])
+		setSaveStatus('saved')
+		syncedIdRef.current = doc.id
+	}, [activeId, doc])
+
+	useEffect(() => {
+		const leavingId = activeId
+		return () => {
+			if (leavingId != null) persistDraft(leavingId)
+		}
+	}, [activeId, persistDraft])
+
+	useEffect(() => {
+		if (!doc || previewId || syncedIdRef.current !== doc.id) return
+		const nextTitle = title.trim() || 'Без названия'
+		const nextContent = normalizeContent(content)
+		if (sameAsLatest(doc.versions, doc.title, doc.content, nextTitle, nextContent) && nextTitle === doc.title && nextContent === doc.content) {
+			setSaveStatus('saved')
+			return
+		}
+		setSaveStatus('pending')
+		if (timerRef.current) clearTimeout(timerRef.current)
+		timerRef.current = setTimeout(() => {
+			persistDraft(doc.id)
+		}, SAVE_DELAY)
+		return () => {
+			if (timerRef.current) clearTimeout(timerRef.current)
+		}
+	}, [title, content, previewId, activeId, doc, persistDraft])
 
 	if (!doc) {
 		return (
@@ -67,40 +161,20 @@ export default function Documents() {
 	function commitTitle() {
 		const value = title.trim() || 'Без названия'
 		setTitle(value)
-		if (value !== doc.title) updateDocument(doc.id, { title: value }, userLogin)
-	}
-
-	function handleContentBlur() {
-		if (previewId) return
-		const nextTitle = title.trim() || 'Без названия'
-		setTitle(nextTitle)
-		const latest = doc.versions[0]
-		if (latest && latest.title === nextTitle && latest.content === content) {
-			if (nextTitle !== doc.title || content !== doc.content) {
-				updateDocument(doc.id, { title: nextTitle, content }, userLogin)
-			}
-			return
-		}
-		if (nextTitle === doc.title && content === doc.content) return
-		saveVersion(doc.id, { title: nextTitle, content, author_login: userLogin })
-	}
-
-	function handleSaveVersion() {
-		const nextTitle = title.trim() || 'Без названия'
-		setTitle(nextTitle)
-		const latest = doc.versions[0]
-		if (latest && latest.title === nextTitle && latest.content === content) return
-		saveVersion(doc.id, { title: nextTitle, content, author_login: userLogin })
 	}
 
 	function confirmRestore() {
 		if (!confirmVersion) return
-		restoreVersion(doc.id, confirmVersion.id, userLogin)
+		restoreVersion(doc.id, confirmVersion.id)
 		setTitle(confirmVersion.title)
 		setContent(confirmVersion.content)
 		setPreviewId(null)
 		setConfirmId(null)
+		setSaveStatus('saved')
 	}
+
+	const statusLabel =
+		saveStatus === 'saving' ? 'сохраняю…' : saveStatus === 'pending' ? 'есть изменения' : 'сохранено'
 
 	return (
 		<section className="relative z-0 grid min-h-[calc(100vh-120px)] gap-5 overflow-x-hidden bg-background px-8 py-6 animate-in fade-in duration-300 lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -120,10 +194,9 @@ export default function Documents() {
 							создал <span className="font-medium text-foreground">{doc.author_login || 'неизвестно'}</span>
 						</span>
 					</div>
-					<Button type="button" onClick={handleSaveVersion}>
-						<Save />
-						Сохранить версию
-					</Button>
+					{preview ? null : (
+						<span className="text-[0.7rem] uppercase tracking-wide text-muted-foreground/80">{statusLabel}</span>
+					)}
 				</div>
 
 				{preview ? (
@@ -149,13 +222,11 @@ export default function Documents() {
 						readOnly={Boolean(preview)}
 					/>
 
-					<Textarea
-						className="min-h-105 flex-1 resize-y rounded-xl p-5 text-sm leading-relaxed"
-						value={preview ? preview.content : content}
-						onChange={e => setContent(e.target.value)}
-						onBlur={handleContentBlur}
-						placeholder="Текст документа…"
-						readOnly={Boolean(preview)}
+					<DocumentEditor
+						key={`${doc.id}-${previewId ?? 'current'}`}
+						content={preview ? preview.content : content}
+						editable={!preview}
+						onChange={setContent}
 					/>
 				</div>
 			</div>

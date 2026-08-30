@@ -1,15 +1,21 @@
 import { create } from 'zustand'
 import { api } from '../api/client'
+import { useWorkspaceStore } from './workspaceStore'
 
 export const useBoardsStore = create((set, get) => ({
 	boards: [],
 	activeId: null,
 	loading: false,
 
-	loadBoards: async () => {
+	loadBoards: async workspaceId => {
+		const id = workspaceId ?? useWorkspaceStore.getState().activeId
 		set({ loading: true })
 		try {
-			const boards = await api('/boards')
+			if (!id) {
+				set({ boards: [], activeId: null })
+				return
+			}
+			const boards = await api(`/boards?workspace_id=${id}`)
 			set(state => ({
 				boards,
 				activeId: boards.some(b => b.id === state.activeId)
@@ -22,7 +28,9 @@ export const useBoardsStore = create((set, get) => ({
 	},
 
 	createBoard: async title => {
-		const board = await api('/boards', { method: 'POST', body: { title } })
+		const workspaceId = useWorkspaceStore.getState().activeId
+		if (!workspaceId) return
+		const board = await api('/boards', { method: 'POST', body: { title, workspace_id: workspaceId } })
 		set(state => ({ boards: [...state.boards, { ...board, tasks: [] }], activeId: board.id }))
 	},
 

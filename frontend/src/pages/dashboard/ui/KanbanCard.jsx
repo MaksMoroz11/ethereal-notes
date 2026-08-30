@@ -1,7 +1,17 @@
-import { X } from 'lucide-react'
+import { Check, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 const STATUSES = ['Открыта', 'В работе', 'На проверке', 'Готово']
+
+function stopCardClick(e) {
+	e.stopPropagation()
+}
 
 export default function KanbanCard({ task, onOpen, onDelete, onMove }) {
 	return (
@@ -26,18 +36,33 @@ export default function KanbanCard({ task, onOpen, onDelete, onMove }) {
 				</Button>
 			</div>
 			<p className="text-sm leading-snug text-foreground">{task.title}</p>
-			<select
-				className="mt-1 rounded-md border border-border bg-accent px-2 py-1.5 text-[0.7rem] text-secondary-foreground outline-none transition hover:border-primary focus:border-primary"
-				value={task.status}
-				onClick={e => e.stopPropagation()}
-				onChange={e => onMove(e.target.value)}
-			>
-				{STATUSES.map(status => (
-					<option key={status} value={status}>
-						{status}
-					</option>
-				))}
-			</select>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						className="mt-1 h-7 w-full justify-between px-2 text-[0.7rem] font-medium"
+						onPointerDown={stopCardClick}
+						onClick={stopCardClick}
+					>
+						<span className="truncate">{task.status}</span>
+						<ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="start" className="w-40" onClick={stopCardClick}>
+					{STATUSES.map(status => (
+						<DropdownMenuItem
+							key={status}
+							className="text-xs"
+							onClick={() => onMove(status)}
+						>
+							<span>{status}</span>
+							{status === task.status ? <Check className="ml-auto h-3.5 w-3.5 shrink-0" /> : null}
+						</DropdownMenuItem>
+					))}
+				</DropdownMenuContent>
+			</DropdownMenu>
 		</div>
 	)
 }
