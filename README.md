@@ -98,7 +98,7 @@
 
 ## Запуск
 
-Для запуска всего приложения через Docker: `docker compose up --build`
+Для запуска всего приложения через Docker: `docker compose up --build`. При старте backend автоматически применяет Alembic-миграции после готовности PostgreSQL.
 
 После запуска frontend доступен на http://localhost, API — на http://localhost:8000, интерактивная документация API — на http://localhost:8000/docs.
 

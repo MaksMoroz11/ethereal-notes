@@ -26,6 +26,7 @@ export default function Sidebar() {
 	const activeWorkspaceId = useWorkspaceStore(state => state.activeId)
 	const members = useWorkspaceStore(state => state.members)
 	const inviteError = useWorkspaceStore(state => state.inviteError)
+	const workspaceError = useWorkspaceStore(state => state.error)
 	const selectWorkspace = useWorkspaceStore(state => state.selectWorkspace)
 	const createWorkspace = useWorkspaceStore(state => state.createWorkspace)
 	const renameWorkspace = useWorkspaceStore(state => state.renameWorkspace)
@@ -56,6 +57,7 @@ export default function Sidebar() {
 	const [workspaceAction, setWorkspaceAction] = useState(null)
 	const [workspaceName, setWorkspaceName] = useState('')
 	const [deleteWorkspaceOpen, setDeleteWorkspaceOpen] = useState(false)
+	const [actionError, setActionError] = useState('')
 
 	const currentWorkspace = workspaces.find(item => item.id === activeWorkspaceId) || null
 	const isOwner = currentWorkspace?.role === 'owner'
@@ -69,8 +71,13 @@ export default function Sidebar() {
 	}, [isDocs])
 
 	async function handleSelectWorkspace(id) {
-		await selectWorkspace(id)
-		await Promise.all([loadBoards(id), loadDocuments(id)])
+		setActionError('')
+		try {
+			await selectWorkspace(id)
+			await Promise.all([loadBoards(id), loadDocuments(id)])
+		} catch (error) {
+			setActionError(error.message)
+		}
 	}
 
 	function beginWorkspaceAction(action) {
@@ -80,34 +87,45 @@ export default function Sidebar() {
 
 	async function submitWorkspace(e) {
 		e.preventDefault()
+		setActionError('')
 		const value = workspaceName.trim()
 		if (!value) return
-		if (workspaceAction === 'create') await createWorkspace(value)
-		if (workspaceAction === 'rename') await renameWorkspace(value)
-		setWorkspaceAction(null)
-		setWorkspaceName('')
+		try {
+			if (workspaceAction === 'create') await createWorkspace(value)
+			if (workspaceAction === 'rename') await renameWorkspace(value)
+			setWorkspaceAction(null)
+			setWorkspaceName('')
+		} catch (error) {
+			setActionError(error.message)
+		}
 	}
 
 	async function confirmWorkspaceDelete() {
-		await deleteWorkspace()
-		setDeleteWorkspaceOpen(false)
+		try {
+			await deleteWorkspace()
+			setDeleteWorkspaceOpen(false)
+		} catch (error) {
+			setActionError(error.message)
+		}
 	}
 
 	function submit(e) {
 		e.preventDefault()
+		setActionError('')
 		const value = title.trim()
 		if (!value) return
-		if (isDocs) createDocument(value)
-		else createBoard(value)
-		setTitle('')
-		setAdding(false)
+		const action = isDocs ? createDocument(value) : createBoard(value)
+		action.then(() => {
+			setTitle('')
+			setAdding(false)
+		}).catch(error => setActionError(error.message))
 	}
 
 	function confirmDelete() {
 		if (!pendingDelete) return
-		if (isDocs) deleteDocument(pendingDelete.id)
-		else deleteBoard(pendingDelete.id)
-		setPendingDelete(null)
+		setActionError('')
+		const action = isDocs ? deleteDocument(pendingDelete.id) : deleteBoard(pendingDelete.id)
+		action.then(() => setPendingDelete(null)).catch(error => setActionError(error.message))
 	}
 
 	async function submitInvite(e) {
@@ -193,6 +211,9 @@ export default function Sidebar() {
 					</Button>
 				</form>
 			) : null}
+			{(workspaceError || actionError) && (
+				<p className="mb-3 text-xs text-destructive">{workspaceError || actionError}</p>
+			)}
 
 			<nav className="mb-3 grid grid-cols-2 gap-1.5">
 				<NavLink

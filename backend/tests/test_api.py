@@ -145,6 +145,16 @@ def test_workspace_data_isolation_and_document_versions(client, users):
     assert restored.status_code == 200
     assert restored.json()["title"] == "Версия 1"
     assert len(restored.json()["versions"]) == 1
+    activity = client.get(f"/workspaces/{workspace_id}/activity", headers=member_headers)
+    assert activity.status_code == 200
+    assert {item["action"] for item in activity.json()} >= {
+        "workspace.create",
+        "board.create",
+        "task.create",
+        "document.create",
+        "document.version",
+        "document.restore",
+    }
 
 
 def test_task_assignee_must_be_workspace_member(client, users):
@@ -160,6 +170,38 @@ def test_task_assignee_must_be_workspace_member(client, users):
         headers=headers,
     )
     assert response.status_code == 404
+
+
+def test_task_assignee_can_be_set_and_cleared_for_workspace_member(client, users):
+    owner = users()
+    member = users()
+    headers = auth_header(owner)
+    workspace_id = client.get("/workspaces", headers=headers).json()[0]["id"]
+    assert client.post(
+        f"/workspaces/{workspace_id}/members",
+        json={"login": member["login"]},
+        headers=headers,
+    ).status_code == 201
+    board = client.post(
+        "/boards",
+        json={"title": "Доска", "workspace_id": workspace_id},
+        headers=headers,
+    ).json()
+    task = client.post(
+        "/tasks",
+        json={"board_id": board["id"], "title": "Задача", "assignee_id": member["id"]},
+        headers=headers,
+    )
+    assert task.status_code == 201
+    assert task.json()["assignee_id"] == member["id"]
+
+    cleared = client.patch(
+        f"/tasks/{task.json()['id']}",
+        json={"assignee_id": None},
+        headers=headers,
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["assignee_id"] is None
 
 
 def test_database_schema_is_at_current_migration():

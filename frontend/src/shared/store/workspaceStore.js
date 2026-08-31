@@ -6,9 +6,12 @@ export const useWorkspaceStore = create((set, get) => ({
 	activeId: null,
 	members: [],
 	inviteError: '',
+	error: '',
 
 	loadWorkspaces: async () => {
-		const workspaces = await api('/workspaces')
+		set({ error: '' })
+		try {
+			const workspaces = await api('/workspaces')
 		set(state => ({
 			workspaces,
 			activeId: workspaces.some(item => item.id === state.activeId)
@@ -17,6 +20,10 @@ export const useWorkspaceStore = create((set, get) => ({
 		}))
 		const activeId = get().activeId
 		if (activeId) await get().loadMembers(activeId)
+		} catch (error) {
+			set({ error: error.message })
+			throw error
+		}
 	},
 
 	selectWorkspace: async id => {

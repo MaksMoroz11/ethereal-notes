@@ -6,10 +6,11 @@ export const useBoardsStore = create((set, get) => ({
 	boards: [],
 	activeId: null,
 	loading: false,
+	error: '',
 
 	loadBoards: async workspaceId => {
 		const id = workspaceId ?? useWorkspaceStore.getState().activeId
-		set({ loading: true })
+		set({ loading: true, error: '' })
 		try {
 			if (!id) {
 				set({ boards: [], activeId: null })
@@ -22,6 +23,9 @@ export const useBoardsStore = create((set, get) => ({
 					? state.activeId
 					: boards[0]?.id ?? null,
 			}))
+		} catch (error) {
+			set({ error: error.message })
+			throw error
 		} finally {
 			set({ loading: false })
 		}

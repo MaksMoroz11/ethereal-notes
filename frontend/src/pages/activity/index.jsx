@@ -46,12 +46,16 @@ export default function Activity() {
 function ActivityFeed({ workspaceId }) {
 	const [items, setItems] = useState([])
 	const [loading, setLoading] = useState(true)
+	const [error, setError] = useState('')
 
 	useEffect(() => {
 		let cancelled = false
 		api(`/workspaces/${workspaceId}/activity`)
 			.then(data => {
 				if (!cancelled) setItems(data)
+			})
+			.catch(err => {
+				if (!cancelled) setError(err.message)
 			})
 			.finally(() => {
 				if (!cancelled) setLoading(false)
@@ -67,6 +71,10 @@ function ActivityFeed({ workspaceId }) {
 				Загрузка журнала…
 			</div>
 		)
+	}
+
+	if (error) {
+		return <div className="px-8 py-12 text-center text-sm text-destructive">Не удалось загрузить журнал: {error}</div>
 	}
 
 	if (items.length === 0) {

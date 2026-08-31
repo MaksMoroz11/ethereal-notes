@@ -6,10 +6,11 @@ export const useDocumentsStore = create((set, get) => ({
 	documents: [],
 	activeId: null,
 	loading: false,
+	error: '',
 
 	loadDocuments: async workspaceId => {
 		const id = workspaceId ?? useWorkspaceStore.getState().activeId
-		set({ loading: true })
+		set({ loading: true, error: '' })
 		try {
 			if (!id) {
 				set({ documents: [], activeId: null })
@@ -22,6 +23,9 @@ export const useDocumentsStore = create((set, get) => ({
 					? state.activeId
 					: documents[0]?.id ?? null,
 			}))
+		} catch (error) {
+			set({ error: error.message })
+			throw error
 		} finally {
 			set({ loading: false })
 		}
