@@ -37,6 +37,8 @@ export default function Documents() {
 	const updateDocument = useDocumentsStore(state => state.updateDocument)
 	const saveVersion = useDocumentsStore(state => state.saveVersion)
 	const restoreVersion = useDocumentsStore(state => state.restoreVersion)
+	const loading = useDocumentsStore(state => state.loading)
+	const error = useDocumentsStore(state => state.error)
 
 	const doc = documents.find(d => d.id === activeId) || null
 	const [title, setTitle] = useState('')
@@ -139,6 +141,14 @@ export default function Documents() {
 			if (timerRef.current) clearTimeout(timerRef.current)
 		}
 	}, [title, content, previewId, activeId, doc, persistDraft])
+
+	if (loading) {
+		return <div className="px-8 py-12 text-center text-sm text-muted-foreground">Загрузка документов…</div>
+	}
+
+	if (error) {
+		return <div className="px-8 py-12 text-center text-sm text-destructive">Не удалось загрузить документы: {error}</div>
+	}
 
 	if (!doc) {
 		return (

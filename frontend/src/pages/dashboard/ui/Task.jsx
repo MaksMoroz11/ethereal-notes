@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { useAuthStore } from '@/shared/store/authStore'
+import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -32,20 +33,40 @@ const STATUS_STYLES = {
 
 export default function Task({ task, onClose, onChange }) {
 	const authorLogin = useAuthStore(state => state.user?.login ?? '')
+	const members = useWorkspaceStore(state => state.members)
 	const isBug = task.tags.includes('BUG')
 	const [desc, setDesc] = useState(task.title)
 	const [additionalDesc, setAdditionalDesc] = useState(task.description)
 	const [editingDesc, setEditingDesc] = useState(false)
 	const [editingAdditional, setEditingAdditional] = useState(false)
+	const [assigneeId, setAssigneeId] = useState(task.assignee_id ? String(task.assignee_id) : '')
+	const [saveError, setSaveError] = useState('')
+
+	async function save(changes) {
+		setSaveError('')
+		try {
+			if (onChange) await onChange(changes)
+		} catch (error) {
+			setSaveError(error.message)
+		}
+	}
 
 	function saveDesc() {
 		setEditingDesc(false)
-		if (onChange && desc !== task.title) onChange({ title: desc })
+		if (desc.trim() && desc !== task.title) save({ title: desc.trim() })
 	}
 
 	function saveAdditional() {
 		setEditingAdditional(false)
-		if (onChange && additionalDesc !== task.description) onChange({ description: additionalDesc })
+		if (onChange && additionalDesc !== task.description) save({ description: additionalDesc })
+	}
+
+	function changeAssignee(event) {
+		const value = event.target.value
+		setAssigneeId(value)
+		if (value !== String(task.assignee_id ?? '')) {
+			save({ assignee_id: value ? Number(value) : null })
+		}
 	}
 
 	return (
@@ -126,6 +147,27 @@ export default function Task({ task, onClose, onChange }) {
 					))}
 				</div>
 			)}
+
+			<div className="mb-6 flex flex-col gap-2">
+				<label htmlFor="task-assignee" className="text-[0.65rem] uppercase tracking-wide text-muted-foreground/70">
+					исполнитель
+				</label>
+				<select
+					id="task-assignee"
+					value={assigneeId}
+					onChange={changeAssignee}
+					className="h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition focus:ring-1 focus:ring-ring"
+				>
+					<option value="">Не назначен</option>
+					{members.map(member => (
+						<option key={member.user_id} value={member.user_id}>
+							{member.login}{member.role === 'owner' ? ' (владелец)' : ''}
+						</option>
+					))}
+				</select>
+			</div>
+
+			{saveError && <p className="mb-5 text-sm text-destructive">{saveError}</p>}
 
 			<div className="flex items-end justify-between gap-4 border-t border-border pt-5">
 				<div className="flex flex-col gap-1.5">

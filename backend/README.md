@@ -141,7 +141,7 @@
 3. Скопировать .env.example в .env и вписать свои данные базы
 4. Запустить: uvicorn app.main:app --reload
 
-Через Docker из корня репозитория: docker compose up --build
+Через Docker из корня репозитория: `docker compose up --build`. Перед запуском API контейнер автоматически применяет миграции Alembic после готовности PostgreSQL.
 
 Фронт будет на http://localhost, API на http://localhost:8000, документация на http://localhost:8000/docs
 

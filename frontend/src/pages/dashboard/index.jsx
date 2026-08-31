@@ -18,9 +18,20 @@ export default function Dashboard() {
 	const createTask = useBoardsStore(state => state.createTask)
 	const deleteTask = useBoardsStore(state => state.deleteTask)
 	const updateTask = useBoardsStore(state => state.updateTask)
+	const loading = useBoardsStore(state => state.loading)
+	const error = useBoardsStore(state => state.error)
 	const [taskTitle, setTaskTitle] = useState('')
 	const [openId, setOpenId] = useState(null)
 	const [pendingDelete, setPendingDelete] = useState(null)
+	const [actionError, setActionError] = useState('')
+
+	if (loading) {
+		return <div className="px-8 py-12 text-center text-sm text-muted-foreground">Загрузка досок…</div>
+	}
+
+	if (error) {
+		return <div className="px-8 py-12 text-center text-sm text-destructive">Не удалось загрузить доски: {error}</div>
+	}
 
 	if (!board) {
 		return (
@@ -32,16 +43,17 @@ export default function Dashboard() {
 
 	function submitTask(e) {
 		e.preventDefault()
+		setActionError('')
 		const value = taskTitle.trim()
 		if (!value) return
-		createTask(value)
+		createTask(value).catch(error => setActionError(error.message))
 		setTaskTitle('')
 	}
 
 	function confirmDelete() {
 		if (!pendingDelete) return
 		if (openId === pendingDelete.id) setOpenId(null)
-		deleteTask(pendingDelete.id)
+		deleteTask(pendingDelete.id).catch(error => setActionError(error.message))
 		setPendingDelete(null)
 	}
 
@@ -64,6 +76,7 @@ export default function Dashboard() {
 					Добавить
 				</Button>
 			</form>
+			{actionError && <p className="max-w-md text-sm text-destructive">{actionError}</p>}
 
 			<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{STATUSES.map((status, index) => {
@@ -87,7 +100,7 @@ export default function Dashboard() {
 										task={task}
 										onOpen={() => setOpenId(task.id)}
 										onDelete={() => setPendingDelete(task)}
-										onMove={next => updateTask(task.id, { status: next })}
+									onMove={next => updateTask(task.id, { status: next }).catch(error => setActionError(error.message))}
 									/>
 								))}
 							</div>

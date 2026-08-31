@@ -1,5 +1,6 @@
 import { Check, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -14,6 +15,8 @@ function stopCardClick(e) {
 }
 
 export default function KanbanCard({ task, onOpen, onDelete, onMove }) {
+	const members = useWorkspaceStore(state => state.members)
+	const assignee = members.find(member => member.user_id === task.assignee_id)
 	return (
 		<div
 			className="flex cursor-pointer flex-col gap-2 rounded-lg border border-border border-l-[3px] border-l-primary bg-card p-3 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300"
@@ -36,6 +39,9 @@ export default function KanbanCard({ task, onOpen, onDelete, onMove }) {
 				</Button>
 			</div>
 			<p className="text-sm leading-snug text-foreground">{task.title}</p>
+			{task.assignee_id ? (
+				<p className="truncate text-xs text-muted-foreground">Исполнитель: {assignee?.login ?? 'неизвестен'}</p>
+			) : null}
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button
