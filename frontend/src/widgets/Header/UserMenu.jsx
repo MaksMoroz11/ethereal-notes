@@ -32,7 +32,7 @@ export default function UserMenu({ login }) {
 					</span>
 				</Button>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" className="w-44">
+			<DropdownMenuContent align="end" className="z-[110] w-44">
 				<DropdownMenuLabel>{login}</DropdownMenuLabel>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem onClick={() => navigate('/dashboard')}>

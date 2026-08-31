@@ -5,9 +5,11 @@ import ConfirmDialog from '@/shared/ui/ConfirmDialog/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { formatLocalDate } from '@/shared/lib/date'
 import DocumentEditor from './ui/DocumentEditor'
 
 const SAVE_DELAY = 2500
+const AUTO_SAVE_STORAGE_KEY = 'ethereal-notes:auto-save'
 
 function normalizeContent(html) {
 	if (!html) return ''
@@ -16,7 +18,7 @@ function normalizeContent(html) {
 }
 
 function formatDate(iso) {
-	return new Date(iso).toLocaleString('ru-RU', {
+	return formatLocalDate(iso, {
 		day: '2-digit',
 		month: '2-digit',
 		year: 'numeric',
@@ -46,13 +48,17 @@ export default function Documents() {
 	const [previewId, setPreviewId] = useState(null)
 	const [confirmId, setConfirmId] = useState(null)
 	const [saveStatus, setSaveStatus] = useState('saved')
+	const [autoSave, setAutoSave] = useState(() => localStorage.getItem(AUTO_SAVE_STORAGE_KEY) !== 'false')
+	const [saveError, setSaveError] = useState('')
 
 	const syncedIdRef = useRef(null)
 	const draftsRef = useRef(new Map())
 	const timerRef = useRef(null)
 	const savingRef = useRef(false)
 	const previewIdRef = useRef(previewId)
+	const autoSaveRef = useRef(autoSave)
 	previewIdRef.current = previewId
+	autoSaveRef.current = autoSave
 
 	if (doc && syncedIdRef.current === doc.id && !previewId) {
 		draftsRef.current.set(doc.id, {
@@ -69,7 +75,7 @@ export default function Documents() {
 			clearTimeout(timerRef.current)
 			timerRef.current = null
 		}
-		if (previewIdRef.current || savingRef.current) return
+		if (!autoSaveRef.current || previewIdRef.current || savingRef.current) return
 		const draft = draftsRef.current.get(docId)
 		if (!draft) return
 		const nextTitle = draft.title.trim() || 'Без названия'
@@ -81,6 +87,10 @@ export default function Documents() {
 				try {
 					await updateDocument(docId, { title: nextTitle, content: nextContent })
 					setSaveStatus('saved')
+					setSaveError('')
+				} catch (error) {
+					setSaveError(error.message)
+					throw error
 				} finally {
 					savingRef.current = false
 				}
@@ -94,10 +104,24 @@ export default function Documents() {
 		try {
 			await saveVersion(docId, { title: nextTitle, content: nextContent })
 			setSaveStatus('saved')
+			setSaveError('')
+		} catch (error) {
+			setSaveError(error.message)
+			throw error
 		} finally {
 			savingRef.current = false
 		}
 	}, [saveVersion, updateDocument])
+
+	function toggleAutoSave(event) {
+		const enabled = event.target.checked
+		setAutoSave(enabled)
+		localStorage.setItem(AUTO_SAVE_STORAGE_KEY, String(enabled))
+		if (!enabled && timerRef.current) {
+			clearTimeout(timerRef.current)
+			timerRef.current = null
+		}
+	}
 
 	useEffect(() => {
 		if (!doc) {
@@ -114,18 +138,19 @@ export default function Documents() {
 		setPreviewId(null)
 		setConfirmId(null)
 		setSaveStatus('saved')
+		setSaveError('')
 		syncedIdRef.current = doc.id
 	}, [activeId, doc])
 
 	useEffect(() => {
 		const leavingId = activeId
 		return () => {
-			if (leavingId != null) persistDraft(leavingId)
+			if (autoSaveRef.current && leavingId != null) persistDraft(leavingId)
 		}
 	}, [activeId, persistDraft])
 
 	useEffect(() => {
-		if (!doc || previewId || syncedIdRef.current !== doc.id) return
+		if (!doc || !autoSave || previewId || syncedIdRef.current !== doc.id) return
 		const nextTitle = title.trim() || 'Без названия'
 		const nextContent = normalizeContent(content)
 		if (sameAsLatest(doc.versions, doc.title, doc.content, nextTitle, nextContent) && nextTitle === doc.title && nextContent === doc.content) {
@@ -140,7 +165,7 @@ export default function Documents() {
 		return () => {
 			if (timerRef.current) clearTimeout(timerRef.current)
 		}
-	}, [title, content, previewId, activeId, doc, persistDraft])
+	}, [autoSave, title, content, previewId, activeId, doc, persistDraft])
 
 	if (loading) {
 		return <div className="px-8 py-12 text-center text-sm text-muted-foreground">Загрузка документов…</div>
@@ -183,8 +208,29 @@ export default function Documents() {
 		setSaveStatus('saved')
 	}
 
-	const statusLabel =
-		saveStatus === 'saving' ? 'сохраняю…' : saveStatus === 'pending' ? 'есть изменения' : 'сохранено'
+	async function saveManualVersion() {
+		if (!doc || savingRef.current) return
+		const nextTitle = title.trim() || 'Без названия'
+		const nextContent = normalizeContent(content)
+		if (sameAsLatest(doc.versions, doc.title, doc.content, nextTitle, nextContent)) return
+		savingRef.current = true
+		setSaveError('')
+		setSaveStatus('saving')
+		try {
+			await saveVersion(doc.id, { title: nextTitle, content: nextContent })
+			setSaveStatus('saved')
+		} catch (error) {
+			setSaveError(error.message)
+			setSaveStatus('pending')
+		} finally {
+			savingRef.current = false
+		}
+	}
+
+	const hasUnsavedChanges = !sameAsLatest(doc.versions, doc.title, doc.content, title.trim() || 'Без названия', normalizeContent(content))
+	const statusLabel = autoSave
+		? saveStatus === 'saving' ? 'сохраняю…' : saveStatus === 'pending' ? 'есть изменения' : 'сохранено'
+		: hasUnsavedChanges ? 'есть несохранённые изменения' : 'сохранено'
 
 	return (
 		<section className="relative z-0 grid min-h-[calc(100vh-120px)] gap-5 overflow-x-hidden bg-background px-8 py-6 animate-in fade-in duration-300 lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -205,9 +251,21 @@ export default function Documents() {
 						</span>
 					</div>
 					{preview ? null : (
-						<span className="text-[0.7rem] uppercase tracking-wide text-muted-foreground/80">{statusLabel}</span>
+						<div className="flex flex-wrap items-center justify-end gap-3">
+							<label className="flex items-center gap-2 text-[0.7rem] text-muted-foreground/80">
+								<input type="checkbox" checked={autoSave} onChange={toggleAutoSave} />
+								Автосохранение
+							</label>
+							<span className="text-[0.7rem] uppercase tracking-wide text-muted-foreground/80">{statusLabel}</span>
+							{!autoSave ? (
+								<Button type="button" size="sm" disabled={!hasUnsavedChanges || saveStatus === 'saving'} onClick={saveManualVersion}>
+									Сохранить версию
+								</Button>
+							) : null}
+						</div>
 					)}
 				</div>
+				{saveError && !preview ? <p className="text-right text-sm text-destructive">{saveError}</p> : null}
 
 				{preview ? (
 					<div className="flex items-center justify-between gap-4 rounded-lg border border-primary/25 bg-accent px-3.5 py-2.5 text-sm text-primary animate-in fade-in duration-200">

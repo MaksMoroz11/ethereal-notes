@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/shared/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,10 +9,11 @@ const LOGIN_PATTERN = /^[A-Za-z0-9_]+$/
 
 export default function Login() {
 	const navigate = useNavigate()
+	const [searchParams] = useSearchParams()
 	const register = useAuthStore(state => state.register)
 	const login = useAuthStore(state => state.login)
 
-	const [mode, setMode] = useState('login')
+	const [mode, setMode] = useState(searchParams.get('mode') === 'register' ? 'register' : 'login')
 	const [loginValue, setLoginValue] = useState('')
 	const [password, setPassword] = useState('')
 	const [error, setError] = useState('')

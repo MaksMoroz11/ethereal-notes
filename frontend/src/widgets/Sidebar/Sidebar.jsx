@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
-import { Check, ChevronDown, FileText, LayoutGrid, Pencil, Plus, ScrollText, Trash2, UserPlus, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { NavLink, useLocation, useSearchParams } from 'react-router-dom'
+import { Check, ChevronDown, FileText, Filter, LayoutGrid, Pencil, Plus, ScrollText, Search, Trash2, UserPlus, X } from 'lucide-react'
 import { useBoardsStore } from '@/shared/store/boardsStore'
 import { useDocumentsStore } from '@/shared/store/documentsStore'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
@@ -17,8 +17,57 @@ import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 
-export default function Sidebar() {
+const ACTIVITY_ACTIONS = [
+	{ value: 'all', label: 'Все действия' },
+	{ value: 'Создание', label: 'Создание' },
+	{ value: 'Изменение', label: 'Изменение' },
+	{ value: 'Удаление', label: 'Удаление' },
+	{ value: 'Версионирование', label: 'Версионирование' },
+	{ value: 'Откат', label: 'Откат' },
+	{ value: 'Участники', label: 'Участники' },
+]
+
+const ACTIVITY_ENTITIES = [
+	{ value: 'all', label: 'Все сущности' },
+	{ value: 'workspace', label: 'Пространство' },
+	{ value: 'board', label: 'Доска' },
+	{ value: 'task', label: 'Задача' },
+	{ value: 'document', label: 'Документ' },
+	{ value: 'member', label: 'Участник' },
+]
+
+const ACTIVITY_PERIODS = [
+	{ value: 'all', label: 'За всё время' },
+	{ value: 'today', label: 'Сегодня' },
+	{ value: 'week', label: 'Последние 7 дней' },
+]
+
+function SidebarFilterMenu({ label, value, options, onChange }) {
+	const current = options.find(option => option.value === value)
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<button type="button" aria-label={label} className="flex h-8 w-full items-center justify-between gap-2 rounded-md border border-input bg-card px-2.5 text-xs text-foreground transition hover:bg-accent">
+					<span className="truncate">{current?.label}</span>
+					<ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
+				</button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="min-w-52">
+				{options.map(option => (
+					<DropdownMenuItem key={option.value} onSelect={() => onChange(option.value)}>
+						{option.label}
+						{option.value === value ? <Check className="ml-auto h-3.5 w-3.5" /> : null}
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	)
+}
+
+export default function Sidebar({ mobileOpen = false, onClose }) {
 	const location = useLocation()
+	const [searchParams, setSearchParams] = useSearchParams()
 	const isDocs = location.pathname.startsWith('/documents')
 	const isActivity = location.pathname.startsWith('/activity')
 
@@ -52,12 +101,19 @@ export default function Sidebar() {
 	const [adding, setAdding] = useState(false)
 	const [title, setTitle] = useState('')
 	const [pendingDelete, setPendingDelete] = useState(null)
+	const [pendingMemberRemove, setPendingMemberRemove] = useState(null)
 	const [inviteLogin, setInviteLogin] = useState('')
 	const [inviting, setInviting] = useState(false)
 	const [workspaceAction, setWorkspaceAction] = useState(null)
 	const [workspaceName, setWorkspaceName] = useState('')
 	const [deleteWorkspaceOpen, setDeleteWorkspaceOpen] = useState(false)
 	const [actionError, setActionError] = useState('')
+	const workspaceInputRef = useRef(null)
+	const activitySearch = searchParams.get('search') || ''
+	const activityUser = searchParams.get('user') || ''
+	const activityAction = searchParams.get('action') || 'all'
+	const activityEntity = searchParams.get('entity') || 'all'
+	const activityPeriod = searchParams.get('period') || 'all'
 
 	const currentWorkspace = workspaces.find(item => item.id === activeWorkspaceId) || null
 	const isOwner = currentWorkspace?.role === 'owner'
@@ -68,7 +124,18 @@ export default function Sidebar() {
 		setAdding(false)
 		setTitle('')
 		setPendingDelete(null)
+		setPendingMemberRemove(null)
 	}, [isDocs])
+
+	useEffect(() => {
+		onClose?.()
+	}, [location.pathname, onClose])
+
+	useEffect(() => {
+		if (!workspaceAction) return undefined
+		const frame = requestAnimationFrame(() => workspaceInputRef.current?.focus())
+		return () => cancelAnimationFrame(frame)
+	}, [workspaceAction])
 
 	async function handleSelectWorkspace(id) {
 		setActionError('')
@@ -83,6 +150,19 @@ export default function Sidebar() {
 	function beginWorkspaceAction(action) {
 		setWorkspaceAction(action)
 		setWorkspaceName(action === 'rename' ? currentWorkspace?.name ?? '' : '')
+	}
+
+	function updateActivityFilter(key, value) {
+		const next = new URLSearchParams(searchParams)
+		if (!value || value === 'all') next.delete(key)
+		else next.set(key, value)
+		setSearchParams(next)
+	}
+
+	function resetActivityFilters() {
+		const next = new URLSearchParams(searchParams)
+		for (const key of ['search', 'user', 'action', 'entity', 'period']) next.delete(key)
+		setSearchParams(next)
 	}
 
 	async function submitWorkspace(e) {
@@ -143,11 +223,28 @@ export default function Sidebar() {
 		}
 	}
 
+	async function confirmMemberRemove() {
+		if (!pendingMemberRemove) return
+		setActionError('')
+		try {
+			await removeMember(pendingMemberRemove.user_id)
+			setPendingMemberRemove(null)
+		} catch (error) {
+			setActionError(error.message)
+		}
+	}
+
 	const items = isDocs ? documents : boards
 	const activeId = isDocs ? activeDocId : activeBoardId
 
 	return (
-		<aside className="flex min-h-0 w-[280px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar p-3 animate-in slide-in-from-left-2 duration-300">
+		<aside
+			className={cn(
+				'flex min-h-0 w-[280px] shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar p-3 animate-in slide-in-from-left-2 duration-300',
+				'max-md:fixed max-md:top-[69px] max-md:bottom-0 max-md:left-0 max-md:z-50 max-md:h-auto max-md:shadow-2xl max-md:transition-transform max-md:duration-300',
+				mobileOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'
+			)}
+		>
 			{workspaces.length > 0 ? (
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
@@ -197,6 +294,7 @@ export default function Sidebar() {
 			{workspaceAction ? (
 				<form className="mb-3 flex gap-1.5" onSubmit={submitWorkspace}>
 					<Input
+						ref={workspaceInputRef}
 						value={workspaceName}
 						onChange={e => setWorkspaceName(e.target.value)}
 						placeholder="Название пространства"
@@ -253,6 +351,36 @@ export default function Sidebar() {
 					Журнал
 				</NavLink>
 			</nav>
+
+			{isActivity ? (
+				<div className="mb-3 space-y-2 rounded-lg border border-border bg-card/40 p-2">
+					<div className="flex items-center gap-1.5 px-1 text-[0.7rem] font-semibold uppercase tracking-wide text-muted-foreground">
+						<Filter className="h-3.5 w-3.5" />
+						Фильтры журнала
+					</div>
+					<div className="relative">
+						<Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+						<Input
+							value={activitySearch}
+							onChange={event => updateActivityFilter('search', event.target.value)}
+							placeholder="Поиск по названию"
+							className="h-8 pl-8 text-xs"
+						/>
+					</div>
+					<Input
+						value={activityUser}
+						onChange={event => updateActivityFilter('user', event.target.value)}
+						placeholder="Пользователь"
+						className="h-8 text-xs"
+					/>
+					<SidebarFilterMenu label="Действие" value={activityAction} options={ACTIVITY_ACTIONS} onChange={value => updateActivityFilter('action', value)} />
+					<SidebarFilterMenu label="Сущность" value={activityEntity} options={ACTIVITY_ENTITIES} onChange={value => updateActivityFilter('entity', value)} />
+					<SidebarFilterMenu label="Период" value={activityPeriod} options={ACTIVITY_PERIODS} onChange={value => updateActivityFilter('period', value)} />
+					<button type="button" onClick={resetActivityFilters} className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition hover:bg-accent hover:text-foreground">
+						Сбросить фильтры
+					</button>
+				</div>
+			) : null}
 
 			{isActivity ? null : adding ? (
 				<form onSubmit={submit}>
@@ -332,35 +460,37 @@ export default function Sidebar() {
 							key={member.user_id}
 							className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground"
 						>
-							<span className="truncate font-medium text-secondary-foreground">{member.login}</span>
-							{isOwner && member.role !== 'owner' ? (
-								<DropdownMenu>
-									<DropdownMenuTrigger asChild>
-										<button type="button" className="shrink-0 text-[0.65rem] uppercase tracking-wide hover:text-foreground">
-											{member.role === 'admin' ? 'администратор' : 'участник'}
-											<ChevronDown className="ml-0.5 inline h-2.5 w-2.5" />
-										</button>
-									</DropdownMenuTrigger>
-									<DropdownMenuContent align="end">
-										<DropdownMenuItem onClick={() => updateMemberRole(member.user_id, 'admin')}>Администратор</DropdownMenuItem>
-										<DropdownMenuItem onClick={() => updateMemberRole(member.user_id, 'member')}>Участник</DropdownMenuItem>
-									</DropdownMenuContent>
-								</DropdownMenu>
-							) : (
-								<span className="shrink-0 text-[0.65rem] uppercase tracking-wide">
-									{member.role === 'owner' ? 'владелец' : member.role === 'admin' ? 'администратор' : 'участник'}
-								</span>
-							)}
-							{isManager && member.role !== 'owner' && !(currentWorkspace?.role === 'admin' && member.role === 'admin') ? (
-								<button
-									type="button"
-									className="rounded p-0.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
-									aria-label={`Удалить ${member.login}`}
-									onClick={() => removeMember(member.user_id)}
-								>
-									<X className="h-3 w-3" />
-								</button>
-							) : null}
+							<span className="min-w-0 truncate font-medium text-secondary-foreground">{member.login}</span>
+							<div className="flex shrink-0 items-center gap-1">
+								{isOwner && member.role !== 'owner' ? (
+									<DropdownMenu>
+										<DropdownMenuTrigger asChild>
+											<button type="button" className="text-[0.65rem] uppercase tracking-wide hover:text-foreground">
+												{member.role === 'admin' ? 'администратор' : 'участник'}
+												<ChevronDown className="ml-0.5 inline h-2.5 w-2.5" />
+											</button>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent align="end">
+											<DropdownMenuItem onClick={() => updateMemberRole(member.user_id, 'admin')}>Администратор</DropdownMenuItem>
+											<DropdownMenuItem onClick={() => updateMemberRole(member.user_id, 'member')}>Участник</DropdownMenuItem>
+										</DropdownMenuContent>
+									</DropdownMenu>
+								) : (
+									<span className="text-[0.65rem] uppercase tracking-wide">
+										{member.role === 'owner' ? 'владелец' : member.role === 'admin' ? 'администратор' : 'участник'}
+									</span>
+								)}
+								{isManager && member.role !== 'owner' && !(currentWorkspace?.role === 'admin' && member.role === 'admin') ? (
+									<button
+										type="button"
+										className="rounded p-0.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+										aria-label={`Удалить ${member.login}`}
+									onClick={() => setPendingMemberRemove(member)}
+									>
+										<X className="h-3 w-3" />
+									</button>
+								) : null}
+							</div>
 						</li>
 					))}
 				</ul>
@@ -401,6 +531,13 @@ export default function Sidebar() {
 				text={currentWorkspace ? `«${currentWorkspace.name}» будет удалено вместе со всеми досками, задачами и документами.` : ''}
 				onConfirm={confirmWorkspaceDelete}
 				onCancel={() => setDeleteWorkspaceOpen(false)}
+			/>
+			<ConfirmDialog
+				open={Boolean(pendingMemberRemove)}
+				title="Удалить участника?"
+				text={pendingMemberRemove ? `«${pendingMemberRemove.login}» будет удалён из пространства.` : ''}
+				onConfirm={confirmMemberRemove}
+				onCancel={() => setPendingMemberRemove(null)}
 			/>
 		</aside>
 	)

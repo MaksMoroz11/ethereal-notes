@@ -1,11 +1,18 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { Check, ChevronDown, X } from 'lucide-react'
 import { useAuthStore } from '@/shared/store/authStore'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { formatLocalDateOnly } from '@/shared/lib/date'
 
 function getInitials(name) {
 	return name
@@ -17,10 +24,12 @@ function getInitials(name) {
 }
 
 function formatDate(iso) {
-	return new Date(iso).toLocaleDateString('ru-RU', {
+	return formatLocalDateOnly(iso, {
 		day: '2-digit',
 		month: '2-digit',
 		year: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
 	})
 }
 
@@ -61,13 +70,14 @@ export default function Task({ task, onClose, onChange }) {
 		if (onChange && additionalDesc !== task.description) save({ description: additionalDesc })
 	}
 
-	function changeAssignee(event) {
-		const value = event.target.value
+	function changeAssignee(value) {
 		setAssigneeId(value)
 		if (value !== String(task.assignee_id ?? '')) {
 			save({ assignee_id: value ? Number(value) : null })
 		}
 	}
+
+	const selectedAssignee = members.find(member => String(member.user_id) === assigneeId)
 
 	return (
 		<div className="w-full rounded-xl border border-border border-l-[3px] border-l-primary bg-card p-7">
@@ -149,22 +159,29 @@ export default function Task({ task, onClose, onChange }) {
 			)}
 
 			<div className="mb-6 flex flex-col gap-2">
-				<label htmlFor="task-assignee" className="text-[0.65rem] uppercase tracking-wide text-muted-foreground/70">
+				<span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground/70">
 					исполнитель
-				</label>
-				<select
-					id="task-assignee"
-					value={assigneeId}
-					onChange={changeAssignee}
-					className="h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition focus:ring-1 focus:ring-ring"
-				>
-					<option value="">Не назначен</option>
-					{members.map(member => (
-						<option key={member.user_id} value={member.user_id}>
-							{member.login}{member.role === 'owner' ? ' (владелец)' : ''}
-						</option>
-					))}
-				</select>
+				</span>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button type="button" variant="outline" className="h-9 w-full justify-between px-3 text-sm font-normal">
+							<span className="truncate">{selectedAssignee?.login ?? 'Не назначен'}</span>
+							<ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
+						<DropdownMenuItem onSelect={() => changeAssignee('')}>
+							<span>Не назначен</span>
+							{!assigneeId ? <Check className="ml-auto h-3.5 w-3.5" /> : null}
+						</DropdownMenuItem>
+						{members.map(member => (
+							<DropdownMenuItem key={member.user_id} onSelect={() => changeAssignee(String(member.user_id))}>
+								<span className="truncate">{member.login}{member.role === 'owner' ? ' (владелец)' : ''}</span>
+								{assigneeId === String(member.user_id) ? <Check className="ml-auto h-3.5 w-3.5" /> : null}
+							</DropdownMenuItem>
+						))}
+					</DropdownMenuContent>
+				</DropdownMenu>
 			</div>
 
 			{saveError && <p className="mb-5 text-sm text-destructive">{saveError}</p>}
