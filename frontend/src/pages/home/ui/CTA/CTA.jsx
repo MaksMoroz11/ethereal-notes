@@ -10,7 +10,7 @@ export default function CTA() {
 					Создайте рабочее пространство за 2 минуты. Бесплатно для команд до 5 человек.
 				</p>
 				<Button asChild size="lg" className="mt-8">
-					<Link to="/login">Создать аккаунт</Link>
+					<Link to="/login?mode=register">Создать аккаунт</Link>
 				</Button>
 			</div>
 		</section>

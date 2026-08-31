@@ -1,3 +1,5 @@
+import { CircleHelp } from 'lucide-react'
+
 const faqs = [
 	{ q: 'Чем Ethereal отличается от Trello или Notion?', a: 'Мы объединяем канбан-доски и документацию в одном месте с обязательным версионированием. Вы не теряете контекст при переключении между задачами и текстами.' },
 	{ q: 'Как работает сохранение версий?', a: 'Система автоматически фиксирует изменения при каждом редактировании. Вы можете просмотреть историю и откатиться к любой точке без потери новых данных.' },
@@ -7,13 +9,16 @@ const faqs = [
 
 export default function FAQ() {
 	return (
-		<section className="px-6 py-20 md:px-10">
+		<section id="faq" className="scroll-mt-24 px-6 py-20 md:px-10">
 			<div className="mx-auto max-w-6xl">
 				<h2 className="mb-10 text-3xl font-bold text-foreground">Частые вопросы</h2>
 				<div className="space-y-4">
 					{faqs.map(item => (
 						<div key={item.q} className="rounded-xl border border-border bg-card p-5">
-							<h3 className="text-base font-semibold text-foreground">{item.q}</h3>
+							<h3 className="flex items-start gap-3 text-base font-semibold text-foreground">
+								<CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+								<span>{item.q}</span>
+							</h3>
 							<p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.a}</p>
 						</div>
 					))}

@@ -9,6 +9,7 @@ import Dashboard from '../pages/dashboard/index'
 import Documents from '../pages/documents/index'
 import Activity from '../pages/activity/index'
 import NotFound from '../pages/not-found/index'
+import Documentation from '../pages/documentation/index'
 
 export default function App() {
 	return (
@@ -17,6 +18,7 @@ export default function App() {
 				<Route element={<Layout />}>
 					<Route path="/" element={<Home />} />
 					<Route path="/login" element={<Login />} />
+					<Route path="/documentation" element={<Documentation />} />
 				</Route>
 				<Route
 					element={

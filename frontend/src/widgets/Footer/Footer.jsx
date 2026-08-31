@@ -1,3 +1,24 @@
+import { CircleHelp, FileText, GitBranch, Mail, Sparkles } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
+
+function SectionLink({ id, icon: Icon, children }) {
+	const location = useLocation()
+
+	function handleClick(event) {
+		if (location.pathname !== '/') return
+		event.preventDefault()
+		document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+		window.history.replaceState(null, '', `/#${id}`)
+	}
+
+	return (
+		<a href={`/#${id}`} onClick={handleClick} className="text-sm text-muted-foreground transition hover:text-foreground">
+			<Icon className="mr-1.5 inline h-3.5 w-3.5" />
+			{children}
+		</a>
+	)
+}
+
 export default function Footer() {
 	return (
 		<footer className="border-t border-border bg-card px-6 py-10 md:px-10">
@@ -11,25 +32,21 @@ export default function Footer() {
 				<div className="flex gap-12">
 					<div className="flex flex-col gap-2">
 						<h4 className="text-sm font-semibold text-foreground">Проект</h4>
-						<a href="#" className="text-sm text-muted-foreground transition hover:text-foreground">
-							Возможности
-						</a>
-						<a href="#" className="text-sm text-muted-foreground transition hover:text-foreground">
-							Тарифы
-						</a>
-						<a href="#" className="text-sm text-muted-foreground transition hover:text-foreground">
+						<SectionLink id="features" icon={Sparkles}>Возможности</SectionLink>
+						<Link to="/documentation" className="text-sm text-muted-foreground transition hover:text-foreground">
+							<FileText className="mr-1.5 inline h-3.5 w-3.5" />
 							Документация
-						</a>
+						</Link>
 					</div>
 					<div className="flex flex-col gap-2">
 						<h4 className="text-sm font-semibold text-foreground">Поддержка</h4>
-						<a href="#" className="text-sm text-muted-foreground transition hover:text-foreground">
-							FAQ
-						</a>
-						<a href="#" className="text-sm text-muted-foreground transition hover:text-foreground">
+						<SectionLink id="faq" icon={CircleHelp}>FAQ</SectionLink>
+						<a href="mailto:maksim.morozov2706@gmail.com" className="text-sm text-muted-foreground transition hover:text-foreground">
+							<Mail className="mr-1.5 inline h-3.5 w-3.5" />
 							Контакты
 						</a>
-						<a href="#" className="text-sm text-muted-foreground transition hover:text-foreground">
+						<a href="https://github.com/MaksMoroz11/ethereal-notes" target="_blank" rel="noreferrer" className="text-sm text-muted-foreground transition hover:text-foreground">
+							<GitBranch className="mr-1.5 inline h-3.5 w-3.5" />
 							GitHub
 						</a>
 					</div>

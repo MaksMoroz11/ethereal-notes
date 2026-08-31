@@ -98,7 +98,32 @@
 
 ## Запуск
 
-Для запуска всего приложения через Docker: `docker compose up --build`. При старте backend автоматически применяет Alembic-миграции после готовности PostgreSQL.
+Для локального запуска можно использовать значения по умолчанию:
+
+```bash
+docker compose up --build
+```
+
+Для запуска на сервере создай `.env` на основе [.env.example](.env.example):
+
+```bash
+cp .env.example .env
+```
+
+В `.env` укажи публичный адрес frontend в `CORS_ORIGINS` и адрес backend в `VITE_API_URL`. Например:
+
+```env
+VITE_API_URL=http://SERVER_IP:8000
+CORS_ORIGINS=http://SERVER_IP
+```
+
+После этого запусти приложение:
+
+```bash
+docker compose up -d --build
+```
+
+Файл `.env` не хранится в Git и останется на сервере после `git pull`. При старте backend автоматически применяет Alembic-миграции после готовности PostgreSQL.
 
 После запуска frontend доступен на http://localhost, API — на http://localhost:8000, интерактивная документация API — на http://localhost:8000/docs.
 
