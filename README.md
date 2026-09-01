@@ -104,27 +104,36 @@
 docker compose up --build
 ```
 
-Для запуска на сервере создай `.env` на основе [.env.example](.env.example):
+Для запуска на сервере с HTTPS создай `.env` на основе [.env.example](.env.example):
 
 ```bash
 cp .env.example .env
 ```
 
-В `.env` укажи публичный адрес frontend в `CORS_ORIGINS` и адрес backend в `VITE_API_URL`. Например:
+Домен должен указывать DNS-записью `A` на IP сервера. Порты `80` и `443` должны быть свободны и доступны из интернета. Сертификат должен быть в формате PEM; укажи пути к файлу полной цепочки и закрытому ключу на сервере:
 
 ```env
-VITE_API_URL=http://SERVER_IP:8000
-CORS_ORIGINS=http://SERVER_IP
+CORS_ORIGINS=https://example.com
+SSL_CERT_FILE=/etc/letsencrypt/live/example.com/fullchain.pem
+SSL_KEY_FILE=/etc/letsencrypt/live/example.com/privkey.pem
 ```
 
 После этого запусти приложение:
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.server.yml up -d --build
 ```
+
+Серверный compose публикует только gateway на порты `80` и `443`. Backend, frontend и PostgreSQL доступны только внутри Docker-сети. Gateway перенаправляет HTTP на HTTPS, проксирует API и использует подключённые файлы сертификата.
 
 Файл `.env` не хранится в Git и останется на сервере после `git pull`. При старте backend автоматически применяет Alembic-миграции после готовности PostgreSQL.
 
-После запуска frontend доступен на http://localhost, API — на http://localhost:8000, интерактивная документация API — на http://localhost:8000/docs.
+После запуска сайт доступен на `https://example.com`, а документация API — на `https://example.com/docs`. Замени `example.com` на свой домен.
+
+При обновлении сертификата перезапусти gateway, чтобы Nginx перечитал файлы:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.server.yml up -d --force-recreate gateway
+```
 
 Инструкции для отдельных частей проекта находятся в [backend/README.md](backend/README.md) и [frontend/README.md](frontend/README.md).
