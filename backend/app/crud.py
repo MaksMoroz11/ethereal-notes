@@ -1,16 +1,17 @@
 from datetime import datetime, timedelta
+from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import ActivityLog, Board, Document, DocumentVersion, Session, Task, User, Workspace, WorkspaceMember
+from app.models import ActivityLog, Board, BoardColumn, Document, DocumentVersion, Folder, Session, Task, User, Workspace, WorkspaceMember
 from app.schemas import BoardUpdate, DocumentUpdate, TaskCreate, TaskUpdate, UserCreate
 from app.security import SESSION_TTL_HOURS, generate_token, hash_password
 
 
-async def create_user(db: AsyncSession, data: UserCreate) -> User:
-    user = User(login=data.login, password=hash_password(data.password))
+async def create_user(db: AsyncSession, data: UserCreate, password: str) -> User:
+    user = User(login=data.login, password=hash_password(password))
     db.add(user)
     await db.flush()
     workspace = Workspace(name=f"Пространство {user.login}", owner_id=user.id)
@@ -106,7 +107,9 @@ async def delete_workspace(db: AsyncSession, workspace_id: int) -> None:
     await db.execute(delete(DocumentVersion).where(DocumentVersion.document_id.in_(document_ids)))
     await db.execute(delete(Document).where(Document.workspace_id == workspace_id))
     await db.execute(delete(Task).where(Task.board_id.in_(board_ids)))
+    await db.execute(delete(BoardColumn).where(BoardColumn.board_id.in_(board_ids)))
     await db.execute(delete(Board).where(Board.workspace_id == workspace_id))
+    await db.execute(delete(Folder).where(Folder.workspace_id == workspace_id))
     await db.execute(delete(WorkspaceMember).where(WorkspaceMember.workspace_id == workspace_id))
     await db.execute(delete(Workspace).where(Workspace.id == workspace_id))
     await db.commit()
@@ -146,18 +149,17 @@ async def update_workspace_member_role(
     return member
 
 
-async def create_board(db: AsyncSession, title: str, owner_id: int, workspace_id: int) -> Board:
-    board = Board(title=title, owner_id=owner_id, workspace_id=workspace_id)
+async def create_board(db: AsyncSession, title: str, owner_id: int, workspace_id: int, folder_id: UUID | None = None) -> Board:
+    board = Board(title=title, owner_id=owner_id, workspace_id=workspace_id, folder_id=folder_id)
     db.add(board)
     await db.commit()
-    await db.refresh(board, attribute_names=["tasks"])
-    return board
+    return await get_board(db, board.id)
 
 
 async def get_boards(db: AsyncSession, workspace_id: int) -> list[Board]:
     result = await db.execute(
         select(Board)
-        .options(selectinload(Board.tasks))
+        .options(selectinload(Board.tasks), selectinload(Board.columns))
         .where(Board.workspace_id == workspace_id)
         .order_by(Board.created_at)
     )
@@ -166,7 +168,7 @@ async def get_boards(db: AsyncSession, workspace_id: int) -> list[Board]:
 
 async def get_board(db: AsyncSession, board_id: int) -> Board | None:
     result = await db.execute(
-        select(Board).options(selectinload(Board.tasks)).where(Board.id == board_id)
+        select(Board).options(selectinload(Board.tasks), selectinload(Board.columns)).where(Board.id == board_id)
     )
     return result.scalar_one_or_none()
 
@@ -180,15 +182,16 @@ async def update_board(db: AsyncSession, board: Board, data: BoardUpdate) -> Boa
 
 
 async def delete_board(db: AsyncSession, board: Board) -> None:
-    await db.delete(board)
+    await db.execute(delete(Task).where(Task.board_id == board.id))
+    await db.execute(delete(BoardColumn).where(BoardColumn.board_id == board.id))
+    await db.execute(delete(Board).where(Board.id == board.id))
     await db.commit()
 
 
 async def create_task(db: AsyncSession, data: TaskCreate, author_id: int) -> Task:
-    task = Task(**data.model_dump(), uid="", author_id=author_id)
+    uid = await db.scalar(text("SELECT nextval('task_uid_seq')"))
+    task = Task(**data.model_dump(), uid=str(uid), author_id=author_id)
     db.add(task)
-    await db.flush()
-    task.uid = str(1000 + task.id)
     await db.commit()
     await db.refresh(task)
     return task
@@ -202,7 +205,7 @@ async def get_tasks(db: AsyncSession, board_id: int | None = None) -> list[Task]
     return list(result.scalars().all())
 
 
-async def get_task(db: AsyncSession, task_id: int) -> Task | None:
+async def get_task(db: AsyncSession, task_id: UUID) -> Task | None:
     return await db.get(Task, task_id)
 
 
@@ -225,8 +228,8 @@ _document_load = (
 )
 
 
-async def create_document(db: AsyncSession, title: str, owner_id: int, workspace_id: int) -> Document:
-    document = Document(title=title, content="", owner_id=owner_id, workspace_id=workspace_id)
+async def create_document(db: AsyncSession, title: str, owner_id: int, workspace_id: int, folder_id: UUID | None = None) -> Document:
+    document = Document(title=title, content="", owner_id=owner_id, workspace_id=workspace_id, folder_id=folder_id)
     db.add(document)
     await db.commit()
     return await get_document(db, document.id)
@@ -242,7 +245,7 @@ async def get_documents(db: AsyncSession, workspace_id: int) -> list[Document]:
     return list(result.scalars().all())
 
 
-async def get_document(db: AsyncSession, document_id: int) -> Document | None:
+async def get_document(db: AsyncSession, document_id: UUID) -> Document | None:
     result = await db.execute(
         select(Document)
         .options(*_document_load)
@@ -272,6 +275,11 @@ async def save_document_version(
     content: str,
     author_id: int,
 ) -> Document:
+    latest = document.versions[0] if document.versions else None
+    if (latest and latest.title == title and latest.content == content) or (
+        latest is None and document.title == title and document.content == content
+    ):
+        return document
     now = datetime.utcnow()
     document.title = title
     document.content = content
@@ -318,7 +326,7 @@ async def log_activity(
     user_id: int,
     action: str,
     entity_type: str,
-    entity_id: int | None,
+    entity_id: int | UUID | None,
     title: str,
 ) -> None:
     db.add(
@@ -327,7 +335,7 @@ async def log_activity(
             user_id=user_id,
             action=action,
             entity_type=entity_type,
-            entity_id=entity_id,
+            entity_id=str(entity_id) if entity_id is not None else None,
             title=title,
         )
     )

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Clock3 } from 'lucide-react'
 import { useDocumentsStore } from '@/shared/store/documentsStore'
+import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 import ConfirmDialog from '@/shared/ui/ConfirmDialog/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,6 +42,8 @@ export default function Documents() {
 	const restoreVersion = useDocumentsStore(state => state.restoreVersion)
 	const loading = useDocumentsStore(state => state.loading)
 	const error = useDocumentsStore(state => state.error)
+	const workspace = useWorkspaceStore(state => state.workspaces.find(item => item.id === state.activeId))
+	const isManager = workspace?.role === 'owner' || workspace?.role === 'admin'
 
 	const doc = documents.find(d => d.id === activeId) || null
 	const [title, setTitle] = useState('')
@@ -55,10 +58,12 @@ export default function Documents() {
 	const draftsRef = useRef(new Map())
 	const timerRef = useRef(null)
 	const savingRef = useRef(false)
+	const pendingSavesRef = useRef(new Map())
 	const previewIdRef = useRef(previewId)
 	const autoSaveRef = useRef(autoSave)
 	previewIdRef.current = previewId
 	autoSaveRef.current = autoSave
+	const isSynced = Boolean(doc && syncedIdRef.current === doc.id)
 
 	if (doc && syncedIdRef.current === doc.id && !previewId) {
 		draftsRef.current.set(doc.id, {
@@ -75,42 +80,29 @@ export default function Documents() {
 			clearTimeout(timerRef.current)
 			timerRef.current = null
 		}
-		if (!autoSaveRef.current || previewIdRef.current || savingRef.current) return
+		if (!autoSaveRef.current || previewIdRef.current) return
+		if (pendingSavesRef.current.has(docId)) return pendingSavesRef.current.get(docId)
 		const draft = draftsRef.current.get(docId)
 		if (!draft) return
 		const nextTitle = draft.title.trim() || 'Без названия'
 		const nextContent = normalizeContent(draft.content)
-		if (sameAsLatest(draft.versions, draft.storedTitle, draft.storedContent, nextTitle, nextContent)) {
-			if (nextTitle !== draft.storedTitle || nextContent !== draft.storedContent) {
-				savingRef.current = true
-				setSaveStatus('saving')
-				try {
-					await updateDocument(docId, { title: nextTitle, content: nextContent })
-					setSaveStatus('saved')
-					setSaveError('')
-				} catch (error) {
-					setSaveError(error.message)
-					throw error
-				} finally {
-					savingRef.current = false
-				}
-			} else {
+		if (nextTitle === draft.storedTitle && nextContent === draft.storedContent) return
+		const operation = (async () => {
+			setSaveStatus('saving')
+			try {
+				const saved = sameAsLatest(draft.versions, draft.storedTitle, draft.storedContent, nextTitle, nextContent)
+					? await updateDocument(docId, { title: nextTitle, content: nextContent })
+					: await saveVersion(docId, { title: nextTitle, content: nextContent })
+				draftsRef.current.set(docId, { ...draft, versions: saved.versions, storedTitle: saved.title, storedContent: saved.content })
 				setSaveStatus('saved')
+				setSaveError('')
+			} catch (error) {
+				setSaveError(error.message)
+				throw error
 			}
-			return
-		}
-		savingRef.current = true
-		setSaveStatus('saving')
-		try {
-			await saveVersion(docId, { title: nextTitle, content: nextContent })
-			setSaveStatus('saved')
-			setSaveError('')
-		} catch (error) {
-			setSaveError(error.message)
-			throw error
-		} finally {
-			savingRef.current = false
-		}
+		})()
+		pendingSavesRef.current.set(docId, operation)
+		try { await operation } finally { pendingSavesRef.current.delete(docId) }
 	}, [saveVersion, updateDocument])
 
 	function toggleAutoSave(event) {
@@ -133,8 +125,13 @@ export default function Documents() {
 			setSaveStatus('saved')
 			return
 		}
-		setTitle(doc.title)
-		setContent(doc.content)
+		if (syncedIdRef.current === doc.id) return
+		const draft = draftsRef.current.get(doc.id)
+		const keepDraft = draft && (
+			draft.title !== draft.storedTitle || draft.content !== draft.storedContent || pendingSavesRef.current.has(doc.id)
+		)
+		setTitle(keepDraft ? draft.title : doc.title)
+		setContent(keepDraft ? draft.content : doc.content)
 		setPreviewId(null)
 		setConfirmId(null)
 		setSaveStatus('saved')
@@ -145,12 +142,12 @@ export default function Documents() {
 	useEffect(() => {
 		const leavingId = activeId
 		return () => {
-			if (autoSaveRef.current && leavingId != null) persistDraft(leavingId)
+			if (autoSaveRef.current && leavingId != null && isManager) persistDraft(leavingId).catch(() => {})
 		}
-	}, [activeId, persistDraft])
+	}, [activeId, persistDraft, isManager])
 
 	useEffect(() => {
-		if (!doc || !autoSave || previewId || syncedIdRef.current !== doc.id) return
+		if (!doc || !autoSave || !isManager || previewId || !isSynced) return
 		const nextTitle = title.trim() || 'Без названия'
 		const nextContent = normalizeContent(content)
 		if (sameAsLatest(doc.versions, doc.title, doc.content, nextTitle, nextContent) && nextTitle === doc.title && nextContent === doc.content) {
@@ -160,12 +157,12 @@ export default function Documents() {
 		setSaveStatus('pending')
 		if (timerRef.current) clearTimeout(timerRef.current)
 		timerRef.current = setTimeout(() => {
-			persistDraft(doc.id)
+			persistDraft(doc.id).catch(() => {})
 		}, SAVE_DELAY)
 		return () => {
 			if (timerRef.current) clearTimeout(timerRef.current)
 		}
-	}, [autoSave, title, content, previewId, activeId, doc, persistDraft])
+	}, [autoSave, isManager, isSynced, title, content, previewId, activeId, doc, persistDraft])
 
 	if (loading) {
 		return <div className="px-8 py-12 text-center text-sm text-muted-foreground">Загрузка документов…</div>
@@ -250,7 +247,7 @@ export default function Documents() {
 							создал <span className="font-medium text-foreground">{doc.author_login || 'неизвестно'}</span>
 						</span>
 					</div>
-					{preview ? null : (
+					{preview || !isManager ? null : (
 						<div className="flex flex-wrap items-center justify-end gap-3">
 							<label className="flex items-center gap-2 text-[0.7rem] text-muted-foreground/80">
 								<input type="checkbox" checked={autoSave} onChange={toggleAutoSave} />
@@ -282,18 +279,18 @@ export default function Documents() {
 				>
 					<Input
 						className="h-auto border-0 border-b border-border bg-transparent px-0 text-xl font-bold shadow-none focus-visible:border-primary focus-visible:ring-0"
-						value={preview ? preview.title : title}
+						value={preview ? preview.title : isSynced ? title : doc.title}
 						onChange={e => setTitle(e.target.value)}
 						onBlur={commitTitle}
 						onKeyDown={e => e.key === 'Enter' && e.target.blur()}
 						placeholder="Название документа"
-						readOnly={Boolean(preview)}
+						readOnly={Boolean(preview) || !isManager}
 					/>
 
 					<DocumentEditor
 						key={`${doc.id}-${previewId ?? 'current'}`}
-						content={preview ? preview.content : content}
-						editable={!preview}
+						content={preview ? preview.content : isSynced ? content : doc.content}
+						editable={!preview && isManager}
 						onChange={setContent}
 					/>
 				</div>
@@ -341,7 +338,7 @@ export default function Documents() {
 										</span>
 										<span className="truncate text-sm text-secondary-foreground">{version.title}</span>
 									</button>
-									<Button
+									{isManager ? <Button
 										type="button"
 										variant="outline"
 										size="sm"
@@ -349,7 +346,7 @@ export default function Documents() {
 										onClick={() => setConfirmId(version.id)}
 									>
 										Откатить
-									</Button>
+									</Button> : null}
 								</li>
 							))}
 						</ul>

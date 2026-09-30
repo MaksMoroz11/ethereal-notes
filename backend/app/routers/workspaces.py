@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import access, crud
 from app.database import get_db
-from app.models import User
+from app.models import Board, Task, User
 from app.routers.auth import get_current_user
 from app.schemas import (
     ActivityRead,
@@ -173,5 +174,14 @@ async def get_activity(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await access.require_member(db, workspace_id, user)
-    return await crud.get_activity(db, workspace_id)
+    membership = await access.require_member(db, workspace_id, user)
+    activity = await crud.get_activity(db, workspace_id)
+    if membership.role != "member":
+        return activity
+    assigned = (await db.execute(
+        select(Task.id).join(Board, Task.board_id == Board.id).where(
+            Board.workspace_id == workspace_id, Task.assignee_id == user.id
+        )
+    )).scalars().all()
+    allowed_ids = {str(task_id) for task_id in assigned}
+    return [item for item in activity if item.entity_type != "task" or item.entity_id in allowed_ids]

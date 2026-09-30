@@ -1,7 +1,8 @@
 from datetime import datetime
+from uuid import UUID, uuid4
 
 from sqlalchemy import ForeignKey, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, UUID as PGUUID
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -65,20 +66,43 @@ class Board(Base):
     title: Mapped[str] = mapped_column()
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"))
+    folder_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("folders.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
     tasks: Mapped[list["Task"]] = relationship(back_populates="board", cascade="all, delete-orphan")
+    columns: Mapped[list["BoardColumn"]] = relationship(back_populates="board", cascade="all, delete-orphan", order_by="BoardColumn.position")
+
+
+class Folder(Base):
+    __tablename__ = "folders"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"))
+    kind: Mapped[str] = mapped_column(default="board")
+    parent_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("folders.id"), nullable=True)
+    title: Mapped[str] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(default=func.now())
+
+
+class BoardColumn(Base):
+    __tablename__ = "board_columns"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    board_id: Mapped[int] = mapped_column(ForeignKey("boards.id"))
+    title: Mapped[str] = mapped_column()
+    position: Mapped[int] = mapped_column()
+    board: Mapped["Board"] = relationship(back_populates="columns")
 
 
 class Task(Base):
     __tablename__ = "tasks"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     board_id: Mapped[int] = mapped_column(ForeignKey("boards.id"))
+    column_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("board_columns.id"))
     uid: Mapped[str] = mapped_column()
     title: Mapped[str] = mapped_column()
     description: Mapped[str] = mapped_column(default="")
-    status: Mapped[str] = mapped_column(default="Открыта")
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     assignee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -93,11 +117,12 @@ class Task(Base):
 class Document(Base):
     __tablename__ = "documents"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     title: Mapped[str] = mapped_column()
     content: Mapped[str] = mapped_column(Text, default="")
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"))
+    folder_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("folders.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
@@ -105,7 +130,7 @@ class Document(Base):
     versions: Mapped[list["DocumentVersion"]] = relationship(
         back_populates="document",
         cascade="all, delete-orphan",
-        order_by="DocumentVersion.created_at.desc()",
+        order_by=lambda: (DocumentVersion.created_at.desc(), DocumentVersion.id.desc()),
     )
 
     @property
@@ -125,7 +150,7 @@ class DocumentVersion(Base):
     __tablename__ = "document_versions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id"))
+    document_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("documents.id"))
     title: Mapped[str] = mapped_column()
     content: Mapped[str] = mapped_column(Text, default="")
     author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -147,7 +172,7 @@ class ActivityLog(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     action: Mapped[str] = mapped_column()
     entity_type: Mapped[str] = mapped_column()
-    entity_id: Mapped[int | None] = mapped_column(nullable=True)
+    entity_id: Mapped[str | None] = mapped_column(nullable=True)
     title: Mapped[str] = mapped_column(default="")
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 

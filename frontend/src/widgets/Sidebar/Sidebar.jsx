@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useSearchParams } from 'react-router-dom'
-import { Check, ChevronDown, FileText, Filter, LayoutGrid, Pencil, Plus, ScrollText, Search, Trash2, UserPlus, X } from 'lucide-react'
+import { Check, ChevronDown, FileText, Filter, Folder, LayoutGrid, Pencil, Plus, ScrollText, Search, Trash2, UserPlus, X } from 'lucide-react'
 import { useBoardsStore } from '@/shared/store/boardsStore'
 import { useDocumentsStore } from '@/shared/store/documentsStore'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
+import { useFoldersStore } from '@/shared/store/foldersStore'
+import FolderTree from './FolderTree'
+import SearchBox from './SearchBox'
 import ConfirmDialog from '@/shared/ui/ConfirmDialog/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import {
@@ -90,6 +93,7 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 	const selectBoard = useBoardsStore(state => state.selectBoard)
 	const deleteBoard = useBoardsStore(state => state.deleteBoard)
 	const loadBoards = useBoardsStore(state => state.loadBoards)
+	const moveBoard = useBoardsStore(state => state.moveBoard)
 
 	const documents = useDocumentsStore(state => state.documents)
 	const activeDocId = useDocumentsStore(state => state.activeId)
@@ -97,8 +101,13 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 	const selectDocument = useDocumentsStore(state => state.selectDocument)
 	const deleteDocument = useDocumentsStore(state => state.deleteDocument)
 	const loadDocuments = useDocumentsStore(state => state.loadDocuments)
+	const moveDocument = useDocumentsStore(state => state.moveDocument)
+	const boardFolders = useFoldersStore(state => state.boardFolders)
+	const documentFolders = useFoldersStore(state => state.documentFolders)
+	const loadFolders = useFoldersStore(state => state.loadFolders)
+	const createFolder = useFoldersStore(state => state.createFolder)
 
-	const [adding, setAdding] = useState(false)
+	const [adding, setAdding] = useState(null)
 	const [title, setTitle] = useState('')
 	const [pendingDelete, setPendingDelete] = useState(null)
 	const [pendingMemberRemove, setPendingMemberRemove] = useState(null)
@@ -121,7 +130,7 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 	const canDeleteWorkspace = isOwner && workspaces.filter(item => item.role === 'owner').length > 1
 
 	useEffect(() => {
-		setAdding(false)
+		setAdding(null)
 		setTitle('')
 		setPendingDelete(null)
 		setPendingMemberRemove(null)
@@ -141,7 +150,7 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 		setActionError('')
 		try {
 			await selectWorkspace(id)
-			await Promise.all([loadBoards(id), loadDocuments(id)])
+			await Promise.all([loadBoards(id), loadDocuments(id), loadFolders(id, 'board'), loadFolders(id, 'document')])
 		} catch (error) {
 			setActionError(error.message)
 		}
@@ -189,16 +198,20 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 		}
 	}
 
-	function submit(e) {
+	async function submit(e) {
 		e.preventDefault()
 		setActionError('')
 		const value = title.trim()
 		if (!value) return
-		const action = isDocs ? createDocument(value) : createBoard(value)
-		action.then(() => {
+		try {
+			if (adding === 'folder') await createFolder(value, null, isDocs ? 'document' : 'board')
+			else if (isDocs) await createDocument(value)
+			else await createBoard(value)
 			setTitle('')
-			setAdding(false)
-		}).catch(error => setActionError(error.message))
+			setAdding(null)
+		} catch (error) {
+			setActionError(error.message)
+		}
 	}
 
 	function confirmDelete() {
@@ -234,7 +247,7 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 		}
 	}
 
-	const items = isDocs ? documents : boards
+		const items = isDocs ? documents : boards
 	const activeId = isDocs ? activeDocId : activeBoardId
 
 	return (
@@ -313,6 +326,7 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 				<p className="mb-3 text-xs text-destructive">{workspaceError || actionError}</p>
 			)}
 
+			{activeWorkspaceId ? <SearchBox workspaceId={activeWorkspaceId} boardFolders={boardFolders} documentFolders={documentFolders} /> : null}
 			<nav className="mb-3 grid grid-cols-2 gap-1.5">
 				<NavLink
 					to="/dashboard"
@@ -382,70 +396,33 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 				</div>
 			) : null}
 
-			{isActivity ? null : adding ? (
+				{isActivity || !isManager ? null : adding ? (
 				<form onSubmit={submit}>
 					<Input
-						placeholder={isDocs ? 'Название документа' : 'Название доски'}
+						placeholder={adding === 'folder' ? 'Название папки' : isDocs ? 'Название документа' : 'Название доски'}
 						value={title}
 						autoFocus
 						onChange={e => setTitle(e.target.value)}
-						onBlur={() => !title.trim() && setAdding(false)}
+						onBlur={() => !title.trim() && setAdding(null)}
 						className="border-primary ring-1 ring-primary/30"
 					/>
 				</form>
 			) : (
-				<Button className="w-full justify-start" onClick={() => setAdding(true)}>
-					<Plus />
-					{isDocs ? 'Создать документ' : 'Создать доску'}
-				</Button>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button type="button" className="w-full justify-start"><Plus />Создать</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="start" className="w-[256px]">
+						<DropdownMenuItem onSelect={() => { setTitle(''); setAdding('item') }}>{isDocs ? <FileText /> : <LayoutGrid />}Создать {isDocs ? 'документ' : 'доску'}</DropdownMenuItem>
+						<DropdownMenuItem onSelect={() => { setTitle(''); setAdding('folder') }}><Folder />Создать папку</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			)}
 
 			{isActivity ? <div className="flex-1" /> : <Separator className="my-4" />}
 
 			{isActivity ? null : (
-			<ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
-				{items.map(item => (
-					<li key={item.id}>
-						<button
-							type="button"
-							onClick={() => (isDocs ? selectDocument(item.id) : selectBoard(item.id))}
-							className={cn(
-								'group relative flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-primary/15 hover:text-foreground',
-								'before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:rounded-full before:bg-primary before:opacity-0 before:transition-opacity hover:before:opacity-70',
-								item.id === activeId && 'bg-primary/30 font-medium text-foreground hover:bg-primary/45 before:opacity-100 hover:before:opacity-100'
-							)}
-						>
-							<span className="truncate">{item.title}</span>
-							{isOwner ? (
-								<span
-									role="button"
-									tabIndex={0}
-									aria-label={isDocs ? 'Удалить документ' : 'Удалить доску'}
-									className={cn(
-										'rounded-md p-1 transition hover:bg-destructive/15 hover:text-destructive',
-										item.id === activeId
-											? 'text-destructive'
-											: 'text-muted-foreground opacity-40 group-hover:opacity-100'
-									)}
-									onClick={e => {
-										e.stopPropagation()
-										setPendingDelete(item)
-									}}
-									onKeyDown={e => {
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault()
-											e.stopPropagation()
-											setPendingDelete(item)
-										}
-									}}
-								>
-									<Trash2 className="h-3.5 w-3.5" />
-								</span>
-							) : null}
-						</button>
-					</li>
-				))}
-			</ul>
+			<FolderTree key={`${activeWorkspaceId}-${isDocs}`} folders={isDocs ? documentFolders : boardFolders} items={items} isDocs={isDocs} isManager={isManager} activeId={activeId} onSelect={isDocs ? selectDocument : selectBoard} onCreateItem={isDocs ? createDocument : createBoard} onMoveItem={isDocs ? moveDocument : moveBoard} onDeleteItem={setPendingDelete} />
 			)}
 
 			<Separator className="my-4" />

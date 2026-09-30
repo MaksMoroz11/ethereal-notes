@@ -8,11 +8,16 @@ from app import crud
 from app.database import get_db
 from app.models import User
 from app.schemas import AuthResponse, LoginRequest, UserCreate, UserRead
-from app.security import verify_password
+from app.security import decrypt_password, public_key_info, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 security = HTTPBearer()
+
+
+@router.get("/public-key")
+async def public_key():
+    return public_key_info()
 
 
 async def get_current_user(
@@ -27,18 +32,26 @@ async def get_current_user(
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
+    try:
+        password = decrypt_password(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     existing = await crud.get_user_by_login(db, data.login)
     if existing is not None:
         raise HTTPException(status_code=400, detail="Логин уже занят")
-    user = await crud.create_user(db, data)
+    user = await crud.create_user(db, data, password)
     session = await crud.create_session(db, user)
     return {"token": session.token, "user": user}
 
 
 @router.post("/login", response_model=AuthResponse)
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    try:
+        password = decrypt_password(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     user = await crud.get_user_by_login(db, data.login)
-    if user is None or not verify_password(data.password, user.password):
+    if user is None or not verify_password(password, user.password):
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
     session = await crud.create_session(db, user)
     return {"token": session.token, "user": user}

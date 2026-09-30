@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import access, crud
@@ -10,12 +11,14 @@ from app.schemas import TaskCreate, TaskRead, TaskUpdate
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
-async def get_accessible_task(task_id: int, db: AsyncSession, user: User):
+async def get_accessible_task(task_id: UUID, db: AsyncSession, user: User):
     task = await crud.get_task(db, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Задача не найдена")
     board = await crud.get_board(db, task.board_id)
-    await access.require_board_access(db, board, user)
+    member = await access.require_board_access(db, board, user)
+    if member.role == "member" and task.assignee_id != user.id:
+        raise HTTPException(status_code=404, detail="Задача не найдена")
     return task
 
 
@@ -27,6 +30,9 @@ async def create_task(
 ):
     board = await crud.get_board(db, data.board_id)
     await access.require_board_access(db, board, user)
+    await access.require_manager(db, board.workspace_id, user)
+    if not any(column.id == data.column_id for column in board.columns):
+        raise HTTPException(status_code=400, detail="Колонка не найдена на доске")
     if data.assignee_id is not None:
         assignee = await crud.get_user(db, data.assignee_id)
         if assignee is None:
@@ -42,17 +48,21 @@ async def create_task(
 @router.get("", response_model=list[TaskRead])
 async def get_tasks(
     board_id: int,
+    assignee_id: int | None = None,
+    all_tasks: bool = False,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     board = await crud.get_board(db, board_id)
     await access.require_board_access(db, board, user)
-    return await crud.get_tasks(db, board_id)
+    selected = await access.task_view_user(db, board.workspace_id, user, assignee_id, all_tasks)
+    tasks = await crud.get_tasks(db, board_id)
+    return [task for task in tasks if selected is None or task.assignee_id == selected]
 
 
 @router.get("/{task_id}", response_model=TaskRead)
 async def get_task(
-    task_id: int,
+    task_id: UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -61,14 +71,19 @@ async def get_task(
 
 @router.patch("/{task_id}", response_model=TaskRead)
 async def update_task(
-    task_id: int,
+    task_id: UUID,
     data: TaskUpdate,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     task = await get_accessible_task(task_id, db, user)
+    board = await crud.get_board(db, task.board_id)
+    await access.require_manager(db, board.workspace_id, user)
+    if "column_id" in data.model_fields_set and data.column_id is None:
+        raise HTTPException(status_code=422, detail="Колонка обязательна")
+    if data.column_id is not None and not any(column.id == data.column_id for column in board.columns):
+        raise HTTPException(status_code=400, detail="Колонка не найдена на доске")
     if data.assignee_id is not None:
-        board = await crud.get_board(db, task.board_id)
         assignee = await crud.get_user(db, data.assignee_id)
         if assignee is None:
             raise HTTPException(status_code=404, detail="Исполнитель не найден")
@@ -76,7 +91,6 @@ async def update_task(
         if member is None:
             raise HTTPException(status_code=404, detail="Исполнитель не найден")
     updated = await crud.update_task(db, task, data)
-    board = await crud.get_board(db, task.board_id)
     if board is not None:
         await crud.log_activity(db, board.workspace_id, user.id, "task.update", "task", updated.id, updated.title)
     return updated
@@ -84,12 +98,13 @@ async def update_task(
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task(
-    task_id: int,
+    task_id: UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     task = await get_accessible_task(task_id, db, user)
     board = await crud.get_board(db, task.board_id)
+    await access.require_manager(db, board.workspace_id, user)
     workspace_id = board.workspace_id if board is not None else None
     title = task.title
     await crud.delete_task(db, task)

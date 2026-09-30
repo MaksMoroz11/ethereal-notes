@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Check, ChevronDown, X } from 'lucide-react'
-import { useAuthStore } from '@/shared/store/authStore'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,7 +10,6 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
 import { formatLocalDateOnly } from '@/shared/lib/date'
 
 function getInitials(name) {
@@ -33,16 +31,9 @@ function formatDate(iso) {
 	})
 }
 
-const STATUS_STYLES = {
-	'Открыта': 'border-muted-foreground/30 bg-muted-foreground/10 text-muted-foreground',
-	'В работе': 'border-sky-400/30 bg-sky-400/10 text-sky-400',
-	'На проверке': 'border-amber-400/30 bg-amber-400/10 text-amber-400',
-	'Готово': 'border-emerald-400/30 bg-emerald-400/10 text-emerald-400',
-}
-
-export default function Task({ task, onClose, onChange }) {
-	const authorLogin = useAuthStore(state => state.user?.login ?? '')
+export default function Task({ task, columnTitle, readOnly, onClose, onChange }) {
 	const members = useWorkspaceStore(state => state.members)
+	const authorLogin = members.find(member => member.user_id === task.author_id)?.login ?? 'неизвестно'
 	const isBug = task.tags.includes('BUG')
 	const [desc, setDesc] = useState(task.title)
 	const [additionalDesc, setAdditionalDesc] = useState(task.description)
@@ -90,14 +81,11 @@ export default function Task({ task, onClose, onChange }) {
 							bug
 						</span>
 					)}
-					{task.status && (
+					{columnTitle && (
 						<span
-							className={cn(
-								'inline-flex items-center rounded-full border px-2.5 py-1 text-[0.7rem] font-semibold uppercase tracking-wide',
-								STATUS_STYLES[task.status] ?? STATUS_STYLES['Открыта']
-							)}
+							className="inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[0.7rem] font-semibold uppercase tracking-wide"
 						>
-							{task.status}
+							{columnTitle}
 						</span>
 					)}
 				</div>
@@ -110,7 +98,7 @@ export default function Task({ task, onClose, onChange }) {
 
 			<div className="mb-5 h-px bg-border" />
 
-			{editingDesc ? (
+			{editingDesc && !readOnly ? (
 				<Input
 					className="mb-3.5 font-semibold"
 					value={desc}
@@ -122,13 +110,13 @@ export default function Task({ task, onClose, onChange }) {
 			) : (
 				<h3
 					className="mb-3.5 cursor-text rounded-md px-1.5 text-[1.05rem] font-semibold leading-relaxed text-foreground transition hover:bg-accent"
-					onClick={() => setEditingDesc(true)}
+					onClick={() => !readOnly && setEditingDesc(true)}
 				>
 					{desc}
 				</h3>
 			)}
 
-			{editingAdditional ? (
+			{editingAdditional && !readOnly ? (
 				<Textarea
 					className="mb-6 min-h-20"
 					value={additionalDesc}
@@ -139,7 +127,7 @@ export default function Task({ task, onClose, onChange }) {
 			) : (
 				<p
 					className="mb-6 cursor-text whitespace-pre-wrap rounded-md px-1.5 text-sm leading-relaxed text-muted-foreground transition hover:bg-accent"
-					onClick={() => setEditingAdditional(true)}
+					onClick={() => !readOnly && setEditingAdditional(true)}
 				>
 					{additionalDesc || <span className="italic text-muted-foreground/70">Добавить описание…</span>}
 				</p>
@@ -162,7 +150,7 @@ export default function Task({ task, onClose, onChange }) {
 				<span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground/70">
 					исполнитель
 				</span>
-				<DropdownMenu>
+				{readOnly ? <span className="text-sm">{selectedAssignee?.login ?? 'Не назначен'}</span> : <DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<Button type="button" variant="outline" className="h-9 w-full justify-between px-3 text-sm font-normal">
 							<span className="truncate">{selectedAssignee?.login ?? 'Не назначен'}</span>
@@ -181,7 +169,7 @@ export default function Task({ task, onClose, onChange }) {
 							</DropdownMenuItem>
 						))}
 					</DropdownMenuContent>
-				</DropdownMenu>
+				</DropdownMenu>}
 			</div>
 
 			{saveError && <p className="mb-5 text-sm text-destructive">{saveError}</p>}

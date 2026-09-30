@@ -31,10 +31,10 @@ export const useDocumentsStore = create((set, get) => ({
 		}
 	},
 
-	createDocument: async title => {
+	createDocument: async (title, folderId = null) => {
 		const workspaceId = useWorkspaceStore.getState().activeId
 		if (!workspaceId) return
-		const document = await api('/documents', { method: 'POST', body: { title, workspace_id: workspaceId } })
+		const document = await api('/documents', { method: 'POST', body: { title, workspace_id: workspaceId, folder_id: folderId } })
 		set(state => ({
 			documents: [document, ...state.documents],
 			activeId: document.id,
@@ -42,6 +42,10 @@ export const useDocumentsStore = create((set, get) => ({
 	},
 
 	selectDocument: id => set({ activeId: id }),
+	moveDocument: async (id, folderId) => {
+		const document = await api(`/documents/${id}`, { method: 'PATCH', body: { folder_id: folderId } })
+		set(state => ({ documents: state.documents.map(item => item.id === id ? document : item) }))
+	},
 
 	deleteDocument: async id => {
 		await api(`/documents/${id}`, { method: 'DELETE' })
@@ -59,9 +63,10 @@ export const useDocumentsStore = create((set, get) => ({
 		set(state => ({
 			documents: state.documents.map(doc => (doc.id === id ? document : doc)),
 		}))
+		return document
 	},
 
-	saveVersion: async (id, snapshot) => {
+		saveVersion: async (id, snapshot) => {
 		const current = get().documents.find(doc => doc.id === id)
 		const document = await api(`/documents/${id}/versions`, {
 			method: 'POST',
@@ -73,6 +78,7 @@ export const useDocumentsStore = create((set, get) => ({
 		set(state => ({
 			documents: state.documents.map(doc => (doc.id === id ? document : doc)),
 		}))
+		return document
 	},
 
 	restoreVersion: async (docId, versionId) => {

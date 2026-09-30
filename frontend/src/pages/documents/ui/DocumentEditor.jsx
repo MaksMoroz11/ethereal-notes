@@ -56,6 +56,12 @@ export default function DocumentEditor({ content, editable, onChange }) {
 		editor.setEditable(editable)
 	}, [editor, editable])
 
+	useEffect(() => {
+		if (!editor) return
+		const next = toEditorHtml(content)
+		if (editor.getHTML() !== next) editor.commands.setContent(next, { emitUpdate: false })
+	}, [editor, content])
+
 	if (!editor) return null
 
 	return (

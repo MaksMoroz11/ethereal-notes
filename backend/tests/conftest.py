@@ -1,5 +1,11 @@
 import asyncio
 import uuid
+import base64
+import os
+
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +15,24 @@ from sqlalchemy.pool import NullPool
 
 from app.config import settings
 from app.main import app
+
+
+def credentials(client, login, password):
+    info = client.get("/auth/public-key").json()
+    public_key = serialization.load_der_public_key(base64.b64decode(info["public_key"]))
+    aes_key = os.urandom(32)
+    nonce = os.urandom(12)
+    encrypted_key = public_key.encrypt(
+        aes_key, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                              algorithm=hashes.SHA256(), label=None),
+    )
+    return {
+        "login": login,
+        "key_id": info["key_id"],
+        "encrypted_key": base64.b64encode(encrypted_key).decode(),
+        "nonce": base64.b64encode(nonce).decode(),
+        "encrypted_password": base64.b64encode(AESGCM(aes_key).encrypt(nonce, password.encode(), None)).decode(),
+    }
 
 
 @pytest.fixture(scope="module")
@@ -23,7 +47,7 @@ def users(client):
 
     def create():
         login = f"test_{uuid.uuid4().hex[:12]}"
-        response = client.post("/auth/register", json={"login": login, "password": "Integration123!"})
+        response = client.post("/auth/register", json=credentials(client, login, "Integration123!"))
         assert response.status_code == 201, response.text
         payload = response.json()
         created.append(payload["user"]["id"])
@@ -69,7 +93,15 @@ async def cleanup(user_ids):
                     {"ids": workspace_ids},
                 )
                 await connection.execute(
+                    text("delete from board_columns where board_id in (select id from boards where workspace_id = any(:ids))"),
+                    {"ids": workspace_ids},
+                )
+                await connection.execute(
                     text("delete from boards where workspace_id = any(:ids)"),
+                    {"ids": workspace_ids},
+                )
+                await connection.execute(
+                    text("delete from folders where workspace_id = any(:ids)"),
                     {"ids": workspace_ids},
                 )
                 await connection.execute(

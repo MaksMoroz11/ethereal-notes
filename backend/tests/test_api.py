@@ -3,12 +3,20 @@ import asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
+from uuid import UUID
 
 from app.config import settings
+from conftest import credentials
 
 
 def auth_header(user):
     return {"Authorization": f"Bearer {user['token']}"}
+
+
+def add_column(client, board, headers, title="Открыта"):
+    response = client.post(f"/boards/{board['id']}/columns", json={"title": title}, headers=headers)
+    assert response.status_code == 201, response.text
+    return response.json()
 
 
 def test_register_session_and_default_workspace(client, users):
@@ -101,7 +109,9 @@ def test_workspace_data_isolation_and_document_versions(client, users):
     headers = auth_header(owner)
     workspace_id = client.post("/workspaces", json={"name": "Private"}, headers=headers).json()["id"]
     board = client.post("/boards", json={"title": "Доска", "workspace_id": workspace_id}, headers=headers).json()
-    task = client.post("/tasks", json={"board_id": board["id"], "title": "Задача"}, headers=headers).json()
+    column = add_column(client, board, headers)
+    task = client.post("/tasks", json={"board_id": board["id"], "column_id": column["id"], "title": "Задача"}, headers=headers).json()
+    UUID(task["id"])
     document = client.post("/documents", json={"title": "Документ", "workspace_id": workspace_id}, headers=headers).json()
     version = client.post(
         f"/documents/{document['id']}/versions",
@@ -137,15 +147,20 @@ def test_workspace_data_isolation_and_document_versions(client, users):
         f"/documents/{document['id']}/versions",
         json={"title": "Версия 2", "content": "updated"},
         headers=member_headers,
+    ).status_code == 403
+    assert client.post(
+        f"/documents/{document['id']}/versions",
+        json={"title": "Версия 2", "content": "updated"},
+        headers=headers,
     ).status_code == 200
     restored = client.post(
         f"/documents/{document['id']}/restore/{version_id}",
-        headers=member_headers,
+        headers=headers,
     )
     assert restored.status_code == 200
     assert restored.json()["title"] == "Версия 1"
     assert len(restored.json()["versions"]) == 1
-    activity = client.get(f"/workspaces/{workspace_id}/activity", headers=member_headers)
+    activity = client.get(f"/workspaces/{workspace_id}/activity", headers=headers)
     assert activity.status_code == 200
     assert {item["action"] for item in activity.json()} >= {
         "workspace.create",
@@ -163,10 +178,11 @@ def test_task_assignee_must_be_workspace_member(client, users):
     headers = auth_header(owner)
     workspace_id = client.get("/workspaces", headers=headers).json()[0]["id"]
     board = client.post("/boards", json={"title": "Доска", "workspace_id": workspace_id}, headers=headers).json()
+    column = add_column(client, board, headers)
 
     response = client.post(
         "/tasks",
-        json={"board_id": board["id"], "title": "Задача", "assignee_id": outsider["id"]},
+        json={"board_id": board["id"], "column_id": column["id"], "title": "Задача", "assignee_id": outsider["id"]},
         headers=headers,
     )
     assert response.status_code == 404
@@ -187,9 +203,10 @@ def test_task_assignee_can_be_set_and_cleared_for_workspace_member(client, users
         json={"title": "Доска", "workspace_id": workspace_id},
         headers=headers,
     ).json()
+    column = add_column(client, board, headers)
     task = client.post(
         "/tasks",
-        json={"board_id": board["id"], "title": "Задача", "assignee_id": member["id"]},
+        json={"board_id": board["id"], "column_id": column["id"], "title": "Задача", "assignee_id": member["id"]},
         headers=headers,
     )
     assert task.status_code == 201
@@ -227,5 +244,74 @@ def test_database_schema_is_at_current_migration():
             await test_engine.dispose()
 
     revision, tables = asyncio.run(read_schema())
-    assert revision == "f2a4d0e95b23"
-    assert {"workspaces", "workspace_members", "activity_logs"} <= tables
+    assert revision == "c92f01a7de34"
+    assert {"workspaces", "workspace_members", "activity_logs", "folders", "board_columns"} <= tables
+
+
+def test_columns_visibility_search_and_folder_tree(client, users):
+    owner, admin, member = users(), users(), users()
+    headers = auth_header(owner)
+    workspace_id = client.get("/workspaces", headers=headers).json()[0]["id"]
+    for other in (admin, member):
+        assert client.post(f"/workspaces/{workspace_id}/members", json={"login": other["login"]}, headers=headers).status_code == 201
+    assert client.patch(f"/workspaces/{workspace_id}/members/{admin['id']}", json={"role": "admin"}, headers=headers).status_code == 200
+
+    root = client.post("/folders", json={"workspace_id": workspace_id, "title": "Проект"}, headers=headers).json()
+    nested = client.post("/folders", json={"workspace_id": workspace_id, "parent_id": root["id"], "title": "Планы"}, headers=headers).json()
+    document_root = client.post("/folders", json={"workspace_id": workspace_id, "title": "Тексты", "kind": "document"}, headers=headers).json()
+    assert root["kind"] == nested["kind"] == "board"
+    assert document_root["kind"] == "document"
+    assert [folder["id"] for folder in client.get(f"/folders?workspace_id={workspace_id}&kind=document", headers=headers).json()] == [document_root["id"]]
+    assert client.patch(f"/folders/{root['id']}", json={"parent_id": nested["id"]}, headers=headers).status_code == 400
+    board = client.post("/boards", json={"workspace_id": workspace_id, "title": "Доска", "folder_id": nested["id"]}, headers=headers).json()
+    assert client.post("/boards", json={"workspace_id": workspace_id, "title": "Неверная папка", "folder_id": document_root["id"]}, headers=headers).status_code == 404
+    document = client.post("/documents", json={"workspace_id": workspace_id, "title": "Материал", "folder_id": document_root["id"]}, headers=headers)
+    assert document.status_code == 201
+    found_document = client.get(f"/search?workspace_id={workspace_id}&q=Материал", headers=headers)
+    assert found_document.status_code == 200
+    assert found_document.json()[0]["user_login"] == owner["login"]
+    assert found_document.json()[0]["folder_id"] == document_root["id"]
+    assert client.post("/documents", json={"workspace_id": workspace_id, "title": "Неверная папка", "folder_id": root["id"]}, headers=headers).status_code == 404
+    assert board["columns"] == []
+    first = add_column(client, board, headers, "Очередь")
+    second = add_column(client, board, headers, "Делаю")
+    assert client.patch(f"/boards/{board['id']}/columns/{second['id']}", json={"position": 0}, headers=headers).status_code == 200
+    assigned = client.post("/tasks", json={"board_id": board["id"], "column_id": first["id"], "title": "секретный текст", "assignee_id": member["id"]}, headers=headers).json()
+    own = client.post("/tasks", json={"board_id": board["id"], "column_id": first["id"], "title": "мой текст", "assignee_id": owner["id"]}, headers=headers).json()
+    assert [task["id"] for task in client.get(f"/boards/{board['id']}", headers=auth_header(member)).json()["tasks"]] == [assigned["id"]]
+    assert client.get(f"/tasks/{own['id']}", headers=auth_header(member)).status_code == 404
+    assert client.patch(f"/tasks/{assigned['id']}", json={"title": "нельзя"}, headers=auth_header(member)).status_code == 403
+    assert [task["id"] for task in client.get(f"/boards/{board['id']}", headers=headers).json()["tasks"]] == [own["id"]]
+    assert len(client.get(f"/boards/{board['id']}?all_tasks=true", headers=auth_header(admin)).json()["tasks"]) == 2
+    assert len(client.get(f"/search?workspace_id={workspace_id}&q=секретный", headers=auth_header(member)).json()) == 1
+    assert client.get(f"/search?workspace_id={workspace_id}&q=мой", headers=auth_header(member)).json() == []
+    assert client.delete(f"/boards/{board['id']}/columns/{first['id']}", headers=headers).status_code == 400
+    assert client.delete(f"/boards/{board['id']}/columns/{first['id']}?delete_tasks=true", headers=headers).status_code == 400
+    assert client.delete(f"/boards/{board['id']}/columns/{first['id']}?target_column_id={second['id']}", headers=headers).status_code == 204
+    assert client.get(f"/tasks/{assigned['id']}", headers=headers).json()["column_id"] == second["id"]
+    assert client.delete(f"/boards/{board['id']}/columns/{second['id']}", headers=headers).status_code == 400
+    assert client.delete(f"/boards/{board['id']}/columns/{second['id']}?delete_tasks=true", headers=headers).status_code == 204
+    assert client.get(f"/tasks/{assigned['id']}", headers=headers).status_code == 404
+    assert client.delete(f"/folders/{root['id']}", headers=headers).status_code == 400
+    assert client.post("/folders", json={"workspace_id": workspace_id, "title": "Запрещено"}, headers=auth_header(member)).status_code == 403
+
+
+def test_encrypted_login_and_other_users_document_update_keep_session(client, users):
+    owner, viewer = users(), users()
+    headers = auth_header(owner)
+    workspace_id = client.get("/workspaces", headers=headers).json()[0]["id"]
+    assert client.post(f"/workspaces/{workspace_id}/members", json={"login": viewer["login"]}, headers=headers).status_code == 201
+    document = client.post("/documents", json={"workspace_id": workspace_id, "title": "Черновик"}, headers=headers).json()
+    UUID(document["id"])
+    before = client.get(f"/documents/{document['id']}", headers=auth_header(viewer))
+    assert before.status_code == 200
+    saved = client.post(f"/documents/{document['id']}/versions", json={"title": "Черновик", "content": "новый текст"}, headers=headers)
+    assert saved.status_code == 200
+    assert len(saved.json()["versions"]) == 1
+    repeated = client.post(f"/documents/{document['id']}/versions", json={"title": "Черновик", "content": "новый текст"}, headers=headers)
+    assert repeated.status_code == 200
+    assert len(repeated.json()["versions"]) == 1
+    assert client.get("/auth/me", headers=auth_header(viewer)).status_code == 200
+    assert client.get(f"/documents/{document['id']}", headers=auth_header(viewer)).json()["content"] == "новый текст"
+    assert client.post("/auth/login", json={"login": owner["login"], "password": "Integration123!"}).status_code == 422
+    assert client.post("/auth/login", json=credentials(client, owner["login"], "Integration123!")).status_code == 200

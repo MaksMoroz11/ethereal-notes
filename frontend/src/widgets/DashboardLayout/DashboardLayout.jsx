@@ -5,6 +5,7 @@ import Sidebar from '../Sidebar/Sidebar'
 import { useBoardsStore } from '@/shared/store/boardsStore'
 import { useDocumentsStore } from '@/shared/store/documentsStore'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
+import { useFoldersStore } from '@/shared/store/foldersStore'
 
 export default function DashboardLayout() {
 	const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -12,6 +13,7 @@ export default function DashboardLayout() {
 	const activeWorkspaceId = useWorkspaceStore(state => state.activeId)
 	const loadBoards = useBoardsStore(state => state.loadBoards)
 	const loadDocuments = useDocumentsStore(state => state.loadDocuments)
+	const loadFolders = useFoldersStore(state => state.loadFolders)
 	const closeMobileSidebar = useCallback(() => setMobileSidebarOpen(false), [])
 
 	useEffect(() => {
@@ -22,7 +24,9 @@ export default function DashboardLayout() {
 		if (!activeWorkspaceId) return
 		loadBoards(activeWorkspaceId)
 		loadDocuments(activeWorkspaceId)
-	}, [activeWorkspaceId, loadBoards, loadDocuments])
+		loadFolders(activeWorkspaceId, 'board')
+		loadFolders(activeWorkspaceId, 'document')
+	}, [activeWorkspaceId, loadBoards, loadDocuments, loadFolders])
 
 	return (
 		<div className="app h-screen overflow-hidden">

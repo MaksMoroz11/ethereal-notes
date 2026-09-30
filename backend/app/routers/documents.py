@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import access, crud
@@ -10,7 +11,7 @@ from app.schemas import DocumentCreate, DocumentRead, DocumentUpdate, DocumentVe
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
-async def get_accessible_document(document_id: int, db: AsyncSession, user: User):
+async def get_accessible_document(document_id: UUID, db: AsyncSession, user: User):
     document = await crud.get_document(db, document_id)
     await access.require_document_access(db, document, user)
     return document
@@ -22,8 +23,9 @@ async def create_document(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await access.require_member(db, data.workspace_id, user)
-    document = await crud.create_document(db, data.title, user.id, data.workspace_id)
+    await access.require_manager(db, data.workspace_id, user)
+    await access.validate_folder(db, data.folder_id, data.workspace_id, "document")
+    document = await crud.create_document(db, data.title, user.id, data.workspace_id, data.folder_id)
     await crud.log_activity(db, data.workspace_id, user.id, "document.create", "document", document.id, document.title)
     return document
 
@@ -40,7 +42,7 @@ async def get_documents(
 
 @router.get("/{document_id}", response_model=DocumentRead)
 async def get_document(
-    document_id: int,
+    document_id: UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -49,18 +51,21 @@ async def get_document(
 
 @router.patch("/{document_id}", response_model=DocumentRead)
 async def update_document(
-    document_id: int,
+    document_id: UUID,
     data: DocumentUpdate,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     document = await get_accessible_document(document_id, db, user)
+    await access.require_manager(db, document.workspace_id, user)
+    if "folder_id" in data.model_fields_set:
+        await access.validate_folder(db, data.folder_id, document.workspace_id, "document")
     return await crud.update_document(db, document, data)
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
-    document_id: int,
+    document_id: UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -74,25 +79,29 @@ async def delete_document(
 
 @router.post("/{document_id}/versions", response_model=DocumentRead)
 async def save_document_version(
-    document_id: int,
+    document_id: UUID,
     data: DocumentVersionCreate,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     document = await get_accessible_document(document_id, db, user)
+    await access.require_manager(db, document.workspace_id, user)
+    changed = document.title != data.title or document.content != data.content
     saved = await crud.save_document_version(db, document, data.title, data.content, user.id)
-    await crud.log_activity(db, document.workspace_id, user.id, "document.version", "document", document.id, data.title)
+    if changed:
+        await crud.log_activity(db, document.workspace_id, user.id, "document.version", "document", document.id, data.title)
     return saved
 
 
 @router.post("/{document_id}/restore/{version_id}", response_model=DocumentRead)
 async def restore_document_version(
-    document_id: int,
+    document_id: UUID,
     version_id: int,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     document = await get_accessible_document(document_id, db, user)
+    await access.require_manager(db, document.workspace_id, user)
     restored = await crud.restore_document_version(db, document, version_id)
     if restored is None:
         raise HTTPException(status_code=404, detail="Версия не найдена")

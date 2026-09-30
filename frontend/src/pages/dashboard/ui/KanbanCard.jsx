@@ -8,15 +8,14 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-const STATUSES = ['Открыта', 'В работе', 'На проверке', 'Готово']
-
 function stopCardClick(e) {
 	e.stopPropagation()
 }
 
-export default function KanbanCard({ task, onOpen, onDelete, onMove }) {
+export default function KanbanCard({ task, columns, readOnly, onOpen, onDelete, onMove }) {
 	const members = useWorkspaceStore(state => state.members)
 	const assignee = members.find(member => member.user_id === task.assignee_id)
+	const column = columns.find(item => item.id === task.column_id)
 	return (
 		<div
 			className="flex cursor-pointer flex-col gap-2 rounded-lg border border-border border-l-[3px] border-l-primary bg-card p-3 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300"
@@ -24,7 +23,7 @@ export default function KanbanCard({ task, onOpen, onDelete, onMove }) {
 		>
 			<div className="flex items-center justify-between">
 				<span className="text-[0.7rem] font-semibold tracking-wider text-primary">#{task.uid}</span>
-				<Button
+				{!readOnly ? <Button
 					type="button"
 					variant="ghost"
 					size="icon"
@@ -36,13 +35,13 @@ export default function KanbanCard({ task, onOpen, onDelete, onMove }) {
 					}}
 				>
 					<X className="h-3.5 w-3.5" />
-				</Button>
+				</Button> : null}
 			</div>
 			<p className="text-sm leading-snug text-foreground">{task.title}</p>
 			{task.assignee_id ? (
 				<p className="truncate text-xs text-muted-foreground">Исполнитель: {assignee?.login ?? 'неизвестен'}</p>
 			) : null}
-			<DropdownMenu>
+			{readOnly ? <span className="text-xs text-muted-foreground">{column?.title}</span> : <DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button
 						type="button"
@@ -52,23 +51,23 @@ export default function KanbanCard({ task, onOpen, onDelete, onMove }) {
 						onPointerDown={stopCardClick}
 						onClick={stopCardClick}
 					>
-						<span className="truncate">{task.status}</span>
+						<span className="truncate">{column?.title}</span>
 						<ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="start" className="w-40" onClick={stopCardClick}>
-					{STATUSES.map(status => (
+					{columns.map(item => (
 						<DropdownMenuItem
-							key={status}
+							key={item.id}
 							className="text-xs"
-							onClick={() => onMove(status)}
+							onClick={() => onMove(item.id)}
 						>
-							<span>{status}</span>
-							{status === task.status ? <Check className="ml-auto h-3.5 w-3.5 shrink-0" /> : null}
+							<span>{item.title}</span>
+							{item.id === task.column_id ? <Check className="ml-auto h-3.5 w-3.5 shrink-0" /> : null}
 						</DropdownMenuItem>
 					))}
 				</DropdownMenuContent>
-			</DropdownMenu>
+			</DropdownMenu>}
 		</div>
 	)
 }

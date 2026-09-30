@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api, setToken } from '../api/client'
+import { encryptPassword } from '../lib/encryptPassword'
 
 const savedToken = sessionStorage.getItem('token')
 const savedUser = sessionStorage.getItem('user')
@@ -10,7 +11,8 @@ export const useAuthStore = create(set => ({
 	user: savedUser ? JSON.parse(savedUser) : null,
 
 	register: async (login, password) => {
-		const data = await api('/auth/register', { method: 'POST', body: { login, password } })
+		const encrypted = await encryptPassword(password)
+		const data = await api('/auth/register', { method: 'POST', body: { login, ...encrypted } })
 		setToken(data.token)
 		sessionStorage.setItem('token', data.token)
 		sessionStorage.setItem('user', JSON.stringify(data.user))
@@ -18,7 +20,8 @@ export const useAuthStore = create(set => ({
 	},
 
 	login: async (login, password) => {
-		const data = await api('/auth/login', { method: 'POST', body: { login, password } })
+		const encrypted = await encryptPassword(password)
+		const data = await api('/auth/login', { method: 'POST', body: { login, ...encrypted } })
 		setToken(data.token)
 		sessionStorage.setItem('token', data.token)
 		sessionStorage.setItem('user', JSON.stringify(data.user))
