@@ -130,7 +130,7 @@ docker compose -f docker-compose.yml -f docker-compose.server.yml up -d --build
 
 Ключ для шифрования паролей создаётся при первом запуске backend и хранится в отдельном Docker volume `authkeys`. Сохраняй этот volume при обновлениях сервера.
 
-После запуска сайт доступен на `https://example.com`, а документация API — на `https://example.com/docs`. Замени `example.com` на свой домен.
+После запуска сайт доступен на `https://example.com`, API — под `/api/`, а документация API — на `https://example.com/api/docs` (адрес `/docs` перенаправляет туда). Замени `example.com` на свой домен.
 
 При обновлении сертификата перезапусти gateway, чтобы Nginx перечитал файлы:
 

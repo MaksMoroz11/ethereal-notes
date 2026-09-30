@@ -8,7 +8,7 @@ from app import crud
 from app.database import get_db
 from app.models import User
 from app.schemas import AuthResponse, LoginRequest, UserCreate, UserRead
-from app.security import decrypt_password, public_key_info, verify_password
+from app.security import decrypt_password, public_key_info, verify_and_update_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -36,6 +36,8 @@ async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
         password = decrypt_password(data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if len(password) < 4:
+        raise HTTPException(status_code=422, detail="Пароль минимум 4 символа")
     existing = await crud.get_user_by_login(db, data.login)
     if existing is not None:
         raise HTTPException(status_code=400, detail="Логин уже занят")
@@ -51,8 +53,13 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     user = await crud.get_user_by_login(db, data.login)
-    if user is None or not verify_password(password, user.password):
+    if user is None:
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+    valid, upgraded = verify_and_update_password(password, user.password)
+    if not valid:
+        raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+    if upgraded is not None:
+        user.password = upgraded
     session = await crud.create_session(db, user)
     return {"token": session.token, "user": user}
 

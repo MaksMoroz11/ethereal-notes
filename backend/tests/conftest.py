@@ -3,6 +3,10 @@ import uuid
 import base64
 import os
 
+if not os.environ.get("TEST_DATABASE_URL"):
+    raise RuntimeError("Use an isolated test database: python tests/run_isolated.py (or set TEST_DATABASE_URL)")
+os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
+
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM

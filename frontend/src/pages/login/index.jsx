@@ -27,7 +27,7 @@ export default function Login() {
 			setError('Логин: только латиница, цифры и _')
 			return
 		}
-		if (password.length < 4) {
+		if (mode === 'register' && password.length < 4) {
 			setError('Пароль минимум 4 символа')
 			return
 		}

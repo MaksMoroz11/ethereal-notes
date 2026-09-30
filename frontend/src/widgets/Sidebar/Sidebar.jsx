@@ -92,7 +92,6 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 	const createBoard = useBoardsStore(state => state.createBoard)
 	const selectBoard = useBoardsStore(state => state.selectBoard)
 	const deleteBoard = useBoardsStore(state => state.deleteBoard)
-	const loadBoards = useBoardsStore(state => state.loadBoards)
 	const moveBoard = useBoardsStore(state => state.moveBoard)
 
 	const documents = useDocumentsStore(state => state.documents)
@@ -100,11 +99,10 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 	const createDocument = useDocumentsStore(state => state.createDocument)
 	const selectDocument = useDocumentsStore(state => state.selectDocument)
 	const deleteDocument = useDocumentsStore(state => state.deleteDocument)
-	const loadDocuments = useDocumentsStore(state => state.loadDocuments)
 	const moveDocument = useDocumentsStore(state => state.moveDocument)
 	const boardFolders = useFoldersStore(state => state.boardFolders)
 	const documentFolders = useFoldersStore(state => state.documentFolders)
-	const loadFolders = useFoldersStore(state => state.loadFolders)
+	const foldersError = useFoldersStore(state => state.error)
 	const createFolder = useFoldersStore(state => state.createFolder)
 
 	const [adding, setAdding] = useState(null)
@@ -134,7 +132,7 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 		setTitle('')
 		setPendingDelete(null)
 		setPendingMemberRemove(null)
-	}, [isDocs])
+	}, [isDocs, activeWorkspaceId])
 
 	useEffect(() => {
 		onClose?.()
@@ -150,7 +148,6 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 		setActionError('')
 		try {
 			await selectWorkspace(id)
-			await Promise.all([loadBoards(id), loadDocuments(id), loadFolders(id, 'board'), loadFolders(id, 'document')])
 		} catch (error) {
 			setActionError(error.message)
 		}
@@ -326,7 +323,8 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 				<p className="mb-3 text-xs text-destructive">{workspaceError || actionError}</p>
 			)}
 
-			{activeWorkspaceId ? <SearchBox workspaceId={activeWorkspaceId} boardFolders={boardFolders} documentFolders={documentFolders} /> : null}
+			{foldersError ? <p className="mb-3 text-xs text-destructive">{foldersError}</p> : null}
+			{activeWorkspaceId ? <SearchBox key={activeWorkspaceId} workspaceId={activeWorkspaceId} boardFolders={boardFolders} documentFolders={documentFolders} /> : null}
 			<nav className="mb-3 grid grid-cols-2 gap-1.5">
 				<NavLink
 					to="/dashboard"

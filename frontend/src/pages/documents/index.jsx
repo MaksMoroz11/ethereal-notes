@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Clock3 } from 'lucide-react'
 import { useDocumentsStore } from '@/shared/store/documentsStore'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
+import { useAuthStore } from '@/shared/store/authStore'
+import { readDraft, snapshotOf, sameSnapshot } from '@/shared/lib/documentDrafts'
 import ConfirmDialog from '@/shared/ui/ConfirmDialog/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,223 +13,76 @@ import DocumentEditor from './ui/DocumentEditor'
 
 const SAVE_DELAY = 2500
 const AUTO_SAVE_STORAGE_KEY = 'ethereal-notes:auto-save'
-
-function normalizeContent(html) {
-	if (!html) return ''
-	const text = html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim()
-	return text ? html : ''
-}
-
 function formatDate(iso) {
-	return formatLocalDate(iso, {
-		day: '2-digit',
-		month: '2-digit',
-		year: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit',
-	})
-}
-
-function sameAsLatest(versions, storedTitle, storedContent, title, content) {
-	const latest = versions[0]
-	if (latest) return latest.title === title && latest.content === content
-	return title === storedTitle && content === storedContent
+	return formatLocalDate(iso, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 export default function Documents() {
 	const documents = useDocumentsStore(state => state.documents)
 	const activeId = useDocumentsStore(state => state.activeId)
-	const updateDocument = useDocumentsStore(state => state.updateDocument)
-	const saveVersion = useDocumentsStore(state => state.saveVersion)
-	const restoreVersion = useDocumentsStore(state => state.restoreVersion)
 	const loading = useDocumentsStore(state => state.loading)
 	const error = useDocumentsStore(state => state.error)
 	const workspace = useWorkspaceStore(state => state.workspaces.find(item => item.id === state.activeId))
-	const isManager = workspace?.role === 'owner' || workspace?.role === 'admin'
+	const doc = documents.find(item => item.id === activeId)
+	if (loading && !doc) return <div className="px-8 py-12 text-center text-sm text-muted-foreground">Загрузка документов…</div>
+	if (error) return <div className="px-8 py-12 text-center text-sm text-destructive">Не удалось загрузить документы: {error}</div>
+	if (!doc) return <div className="px-8 py-12 text-center text-sm text-muted-foreground">Создайте или выберите документ слева</div>
+	return <DocumentWorkspace key={doc.id} doc={doc} isManager={workspace?.role === 'owner' || workspace?.role === 'admin'} />
+}
 
-	const doc = documents.find(d => d.id === activeId) || null
-	const [title, setTitle] = useState('')
-	const [content, setContent] = useState('')
+function DocumentWorkspace({ doc, isManager }) {
+	const userId = useAuthStore(state => state.user?.id)
+	const storedDraft = useDocumentsStore(state => state.drafts[doc.id])
+	const draft = storedDraft || readDraft(userId, doc.id) || doc
+	const { title, content } = draft
+	const saveStatus = useDocumentsStore(state => state.statuses[doc.id] || 'saved')
+	const saveError = useDocumentsStore(state => state.saveErrors[doc.id] || '')
+	const restoring = useDocumentsStore(state => state.restoring[doc.id] || false)
+	const editDraft = useDocumentsStore(state => state.editDraft)
+	const saveDraft = useDocumentsStore(state => state.saveDraft)
+	const restoreVersion = useDocumentsStore(state => state.restoreVersion)
 	const [previewId, setPreviewId] = useState(null)
 	const [confirmId, setConfirmId] = useState(null)
-	const [saveStatus, setSaveStatus] = useState('saved')
 	const [autoSave, setAutoSave] = useState(() => localStorage.getItem(AUTO_SAVE_STORAGE_KEY) !== 'false')
-	const [saveError, setSaveError] = useState('')
-
-	const syncedIdRef = useRef(null)
-	const draftsRef = useRef(new Map())
-	const timerRef = useRef(null)
-	const savingRef = useRef(false)
-	const pendingSavesRef = useRef(new Map())
-	const previewIdRef = useRef(previewId)
 	const autoSaveRef = useRef(autoSave)
-	previewIdRef.current = previewId
-	autoSaveRef.current = autoSave
-	const isSynced = Boolean(doc && syncedIdRef.current === doc.id)
-
-	if (doc && syncedIdRef.current === doc.id && !previewId) {
-		draftsRef.current.set(doc.id, {
-			title,
-			content,
-			versions: doc.versions,
-			storedTitle: doc.title,
-			storedContent: doc.content,
-		})
-	}
-
-	const persistDraft = useCallback(async docId => {
-		if (timerRef.current) {
-			clearTimeout(timerRef.current)
-			timerRef.current = null
-		}
-		if (!autoSaveRef.current || previewIdRef.current) return
-		if (pendingSavesRef.current.has(docId)) return pendingSavesRef.current.get(docId)
-		const draft = draftsRef.current.get(docId)
-		if (!draft) return
-		const nextTitle = draft.title.trim() || 'Без названия'
-		const nextContent = normalizeContent(draft.content)
-		if (nextTitle === draft.storedTitle && nextContent === draft.storedContent) return
-		const operation = (async () => {
-			setSaveStatus('saving')
-			try {
-				const saved = sameAsLatest(draft.versions, draft.storedTitle, draft.storedContent, nextTitle, nextContent)
-					? await updateDocument(docId, { title: nextTitle, content: nextContent })
-					: await saveVersion(docId, { title: nextTitle, content: nextContent })
-				draftsRef.current.set(docId, { ...draft, versions: saved.versions, storedTitle: saved.title, storedContent: saved.content })
-				setSaveStatus('saved')
-				setSaveError('')
-			} catch (error) {
-				setSaveError(error.message)
-				throw error
-			}
-		})()
-		pendingSavesRef.current.set(docId, operation)
-		try { await operation } finally { pendingSavesRef.current.delete(docId) }
-	}, [saveVersion, updateDocument])
+	const hasUnsavedChanges = !sameSnapshot(snapshotOf(draft), doc)
+	useEffect(() => { autoSaveRef.current = autoSave }, [autoSave])
+	useEffect(() => {
+		if (!autoSave || !isManager || previewId || restoring || !hasUnsavedChanges) return
+		const timer = setTimeout(() => saveDraft(doc.id, { drain: () => autoSaveRef.current, enabled: () => autoSaveRef.current }).catch(() => {}), SAVE_DELAY)
+		return () => clearTimeout(timer)
+	}, [autoSave, isManager, previewId, restoring, hasUnsavedChanges, title, content, doc.id, saveDraft])
+	useEffect(() => {
+		const id = doc.id
+		return () => { if (autoSaveRef.current && isManager) saveDraft(id, { drain: () => autoSaveRef.current, enabled: () => autoSaveRef.current }).catch(() => {}) }
+	}, [doc.id, isManager, saveDraft])
 
 	function toggleAutoSave(event) {
 		const enabled = event.target.checked
+		autoSaveRef.current = enabled
 		setAutoSave(enabled)
 		localStorage.setItem(AUTO_SAVE_STORAGE_KEY, String(enabled))
-		if (!enabled && timerRef.current) {
-			clearTimeout(timerRef.current)
-			timerRef.current = null
-		}
 	}
-
-	useEffect(() => {
-		if (!doc) {
-			syncedIdRef.current = null
-			setTitle('')
-			setContent('')
+	function commitTitle() {
+		const next = title.trim() || 'Без названия'
+		if (isManager && !previewId && !restoring && next !== title) editDraft(doc.id, { title: next })
+	}
+	function saveManualVersion() { saveDraft(doc.id, { drain: () => autoSaveRef.current }).catch(() => {}) }
+	async function confirmRestore() {
+		if (!confirmVersion || restoring) return
+		try {
+			await restoreVersion(doc.id, confirmVersion.id)
 			setPreviewId(null)
 			setConfirmId(null)
-			setSaveStatus('saved')
-			return
-		}
-		if (syncedIdRef.current === doc.id) return
-		const draft = draftsRef.current.get(doc.id)
-		const keepDraft = draft && (
-			draft.title !== draft.storedTitle || draft.content !== draft.storedContent || pendingSavesRef.current.has(doc.id)
-		)
-		setTitle(keepDraft ? draft.title : doc.title)
-		setContent(keepDraft ? draft.content : doc.content)
-		setPreviewId(null)
-		setConfirmId(null)
-		setSaveStatus('saved')
-		setSaveError('')
-		syncedIdRef.current = doc.id
-	}, [activeId, doc])
-
-	useEffect(() => {
-		const leavingId = activeId
-		return () => {
-			if (autoSaveRef.current && leavingId != null && isManager) persistDraft(leavingId).catch(() => {})
-		}
-	}, [activeId, persistDraft, isManager])
-
-	useEffect(() => {
-		if (!doc || !autoSave || !isManager || previewId || !isSynced) return
-		const nextTitle = title.trim() || 'Без названия'
-		const nextContent = normalizeContent(content)
-		if (sameAsLatest(doc.versions, doc.title, doc.content, nextTitle, nextContent) && nextTitle === doc.title && nextContent === doc.content) {
-			setSaveStatus('saved')
-			return
-		}
-		setSaveStatus('pending')
-		if (timerRef.current) clearTimeout(timerRef.current)
-		timerRef.current = setTimeout(() => {
-			persistDraft(doc.id).catch(() => {})
-		}, SAVE_DELAY)
-		return () => {
-			if (timerRef.current) clearTimeout(timerRef.current)
-		}
-	}, [autoSave, isManager, isSynced, title, content, previewId, activeId, doc, persistDraft])
-
-	if (loading) {
-		return <div className="px-8 py-12 text-center text-sm text-muted-foreground">Загрузка документов…</div>
+		} catch { /* The store keeps the draft and exposes the error. */ }
 	}
-
-	if (error) {
-		return <div className="px-8 py-12 text-center text-sm text-destructive">Не удалось загрузить документы: {error}</div>
-	}
-
-	if (!doc) {
-		return (
-			<div className="px-8 py-12 text-center text-sm text-muted-foreground animate-in fade-in duration-300">
-				Создайте или выберите документ слева
-			</div>
-		)
-	}
-
-	const preview = previewId ? doc.versions.find(v => v.id === previewId) : null
-	const confirmIndex = confirmId ? doc.versions.findIndex(v => v.id === confirmId) : -1
+	const preview = previewId ? doc.versions.find(version => version.id === previewId) : null
+	const confirmIndex = confirmId ? doc.versions.findIndex(version => version.id === confirmId) : -1
 	const confirmVersion = confirmIndex >= 0 ? doc.versions[confirmIndex] : null
-	const dropCount = confirmIndex > 0 ? confirmIndex : 0
-
+	const dropCount = Math.max(confirmIndex, 0)
 	const shownUpdatedAt = preview ? preview.created_at : doc.updated_at
-	const shownUpdatedBy = preview
-		? preview.author_login || 'неизвестно'
-		: doc.updated_by || doc.versions[0]?.author_login || doc.author_login || 'неизвестно'
-
-	function commitTitle() {
-		const value = title.trim() || 'Без названия'
-		setTitle(value)
-	}
-
-	function confirmRestore() {
-		if (!confirmVersion) return
-		restoreVersion(doc.id, confirmVersion.id)
-		setTitle(confirmVersion.title)
-		setContent(confirmVersion.content)
-		setPreviewId(null)
-		setConfirmId(null)
-		setSaveStatus('saved')
-	}
-
-	async function saveManualVersion() {
-		if (!doc || savingRef.current) return
-		const nextTitle = title.trim() || 'Без названия'
-		const nextContent = normalizeContent(content)
-		if (sameAsLatest(doc.versions, doc.title, doc.content, nextTitle, nextContent)) return
-		savingRef.current = true
-		setSaveError('')
-		setSaveStatus('saving')
-		try {
-			await saveVersion(doc.id, { title: nextTitle, content: nextContent })
-			setSaveStatus('saved')
-		} catch (error) {
-			setSaveError(error.message)
-			setSaveStatus('pending')
-		} finally {
-			savingRef.current = false
-		}
-	}
-
-	const hasUnsavedChanges = !sameAsLatest(doc.versions, doc.title, doc.content, title.trim() || 'Без названия', normalizeContent(content))
-	const statusLabel = autoSave
-		? saveStatus === 'saving' ? 'сохраняю…' : saveStatus === 'pending' ? 'есть изменения' : 'сохранено'
-		: hasUnsavedChanges ? 'есть несохранённые изменения' : 'сохранено'
+	const shownUpdatedBy = preview ? preview.author_login || 'неизвестно' : doc.updated_by || doc.author_login || 'неизвестно'
+	const statusLabel = saveStatus === 'saving' ? 'сохраняю…' : hasUnsavedChanges ? 'есть несохранённые изменения' : 'сохранено'
 
 	return (
 		<section className="relative z-0 grid min-h-[calc(100vh-120px)] gap-5 overflow-x-hidden bg-background px-8 py-6 animate-in fade-in duration-300 lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -262,7 +117,10 @@ export default function Documents() {
 						</div>
 					)}
 				</div>
-				{saveError && !preview ? <p className="text-right text-sm text-destructive">{saveError}</p> : null}
+				{saveError ? <div className="text-right text-sm text-destructive">
+					<p role="alert">{saveError}</p>
+					{autoSave && !preview && !restoring ? <Button type="button" variant="outline" size="sm" onClick={saveManualVersion}>Повторить сохранение</Button> : null}
+				</div> : null}
 
 				{preview ? (
 					<div className="flex items-center justify-between gap-4 rounded-lg border border-primary/25 bg-accent px-3.5 py-2.5 text-sm text-primary animate-in fade-in duration-200">
@@ -279,19 +137,19 @@ export default function Documents() {
 				>
 					<Input
 						className="h-auto border-0 border-b border-border bg-transparent px-0 text-xl font-bold shadow-none focus-visible:border-primary focus-visible:ring-0"
-						value={preview ? preview.title : isSynced ? title : doc.title}
-						onChange={e => setTitle(e.target.value)}
+						value={preview ? preview.title : title}
+						onChange={e => editDraft(doc.id, { title: e.target.value })}
 						onBlur={commitTitle}
 						onKeyDown={e => e.key === 'Enter' && e.target.blur()}
 						placeholder="Название документа"
-						readOnly={Boolean(preview) || !isManager}
+						readOnly={Boolean(preview) || !isManager || restoring}
 					/>
 
 					<DocumentEditor
 						key={`${doc.id}-${previewId ?? 'current'}`}
-						content={preview ? preview.content : isSynced ? content : doc.content}
-						editable={!preview && isManager}
-						onChange={setContent}
+						content={preview ? preview.content : content}
+						editable={!preview && isManager && !restoring}
+						onChange={value => editDraft(doc.id, { content: value })}
 					/>
 				</div>
 			</div>
@@ -343,6 +201,7 @@ export default function Documents() {
 										variant="outline"
 										size="sm"
 										className="self-start"
+										disabled={restoring}
 										onClick={() => setConfirmId(version.id)}
 									>
 										Откатить
@@ -367,7 +226,9 @@ export default function Documents() {
 				}
 				confirmLabel="Откатить"
 				onConfirm={confirmRestore}
-				onCancel={() => setConfirmId(null)}
+				busy={restoring}
+				error={saveError}
+				onCancel={() => { if (!restoring) setConfirmId(null) }}
 			/>
 		</section>
 	)

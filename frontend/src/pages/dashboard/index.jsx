@@ -39,12 +39,18 @@ export default function Dashboard() {
 	const [pendingDelete, setPendingDelete] = useState(null)
 	const [actionError, setActionError] = useState('')
 	const [checkingColumn, setCheckingColumn] = useState(false)
+	const [deletingColumn, setDeletingColumn] = useState(false)
+	const [deletingTask, setDeletingTask] = useState(false)
 	const [searchParams, setSearchParams] = useSearchParams()
 	const requestedTask = searchParams.get('task')
 
 	useEffect(() => {
 		setDrafts({})
 		setPendingColumn(null)
+		setPendingDelete(null)
+		setEditingColumn(null)
+		setOpenId(null)
+		setActionError('')
 	}, [board?.id])
 
 	function closeTask() {
@@ -85,16 +91,31 @@ export default function Dashboard() {
 		}
 	}
 
-	function confirmDeleteColumn() {
-		if (!pendingColumn || !board) return
-		const tasks = board.tasks.filter(task => task.column_id === pendingColumn.id)
+	async function confirmDeleteColumn() {
+		if (!pendingColumn || !board || deletingColumn) return
 		const remaining = board.columns.filter(column => column.id !== pendingColumn.id)
-		if (tasks.length && remaining.length && !targetColumn) {
+		if (pendingColumn.taskCount && remaining.length && !targetColumn) {
 			return setActionError('Выберите колонку для переноса задач')
 		}
-		run(deleteColumn(pendingColumn.id, targetColumn || null, tasks.length > 0 && remaining.length === 0))
-		setPendingColumn(null)
-		setTargetColumn('')
+		setDeletingColumn(true)
+		setActionError('')
+		try {
+			await deleteColumn(pendingColumn.id, targetColumn || null, pendingColumn.taskCount > 0 && remaining.length === 0)
+			setPendingColumn(null)
+			setTargetColumn('')
+		} catch (error) { setActionError(error.message) }
+		finally { setDeletingColumn(false) }
+	}
+
+	async function confirmDeleteTask() {
+		if (!pendingDelete || deletingTask) return
+		setDeletingTask(true)
+		setActionError('')
+		try {
+			await deleteTask(pendingDelete.id)
+			setPendingDelete(null)
+		} catch (error) { setActionError(error.message) }
+		finally { setDeletingTask(false) }
 	}
 
 	function setDraft(columnId, changes) {
@@ -200,22 +221,23 @@ export default function Dashboard() {
 			</div>
 			<Dialog open={Boolean(openTask)} onOpenChange={open => !open && closeTask()}>
 				<DialogContent showClose={false} className="max-w-2xl border-0 bg-transparent p-0 shadow-none sm:max-w-2xl">
-					{openTask ? <Task task={openTask} columnTitle={openColumn?.title} readOnly={!isManager} onClose={closeTask} onChange={changes => updateTask(openTask.id, changes)} /> : null}
+					{openTask ? <Task key={openTask.id} task={openTask} columnTitle={openColumn?.title} readOnly={!isManager} onClose={closeTask} onChange={changes => updateTask(openTask.id, changes)} /> : null}
 				</DialogContent>
 			</Dialog>
-			<Dialog open={Boolean(pendingDelete)} onOpenChange={next => !next && setPendingDelete(null)}>
+			<Dialog open={Boolean(pendingDelete)} onOpenChange={next => { if (!next && !deletingTask) setPendingDelete(null) }}>
 				<DialogContent showClose={false}>
 					<DialogHeader>
 						<DialogTitle>Удалить задачу?</DialogTitle>
 						<DialogDescription>{pendingDelete ? `«${pendingDelete.title}» будет удалена без возможности восстановления.` : ''}</DialogDescription>
 					</DialogHeader>
+					{actionError ? <p role="alert" className="text-sm text-destructive">{actionError}</p> : null}
 					<DialogFooter>
-						<Button type="button" variant="outline" onClick={() => setPendingDelete(null)}>Отмена</Button>
-						<Button type="button" variant="destructive" onClick={() => { if (pendingDelete) run(deleteTask(pendingDelete.id)); setPendingDelete(null) }}>Удалить</Button>
+						<Button type="button" variant="outline" disabled={deletingTask} onClick={() => setPendingDelete(null)}>Отмена</Button>
+						<Button type="button" variant="destructive" disabled={deletingTask} onClick={confirmDeleteTask}>Удалить</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
-			<Dialog open={Boolean(pendingColumn)} onOpenChange={next => { if (!next) setPendingColumn(null) }}>
+			<Dialog open={Boolean(pendingColumn)} onOpenChange={next => { if (!next && !deletingColumn) setPendingColumn(null) }}>
 				<DialogContent showClose={false}>
 					<DialogHeader>
 						<DialogTitle>Удалить колонку «{currentColumn?.title}»?</DialogTitle>
@@ -237,9 +259,10 @@ export default function Dashboard() {
 							options={[{ value: '', label: 'Выберите колонку' }, ...remainingColumns.map(column => ({ value: column.id, label: column.title }))]}
 						/>
 					</div> : null}
+					{actionError ? <p role="alert" className="text-sm text-destructive">{actionError}</p> : null}
 					<DialogFooter>
-						<Button type="button" variant="outline" onClick={() => setPendingColumn(null)}>Отмена</Button>
-						<Button type="button" variant="destructive" disabled={checkingColumn || (deletingTaskCount > 0 && remainingColumns.length > 0 && !targetColumn)} onClick={confirmDeleteColumn}>
+						<Button type="button" variant="outline" disabled={deletingColumn} onClick={() => setPendingColumn(null)}>Отмена</Button>
+						<Button type="button" variant="destructive" disabled={checkingColumn || deletingColumn || (deletingTaskCount > 0 && remainingColumns.length > 0 && !targetColumn)} onClick={confirmDeleteColumn}>
 							{deletingTaskCount && !remainingColumns.length ? 'Удалить колонку и задачи' : 'Удалить колонку'}
 						</Button>
 					</DialogFooter>

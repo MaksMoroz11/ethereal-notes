@@ -8,7 +8,25 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 LOGIN_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 
 
-class TaskCreate(BaseModel):
+class NamedModel(BaseModel):
+    @field_validator("title", check_fields=False)
+    @classmethod
+    def title_not_blank(cls, value: str) -> str:
+        if value is None or not value.strip():
+            raise ValueError("Название не может быть пустым")
+        return value.strip()
+
+
+class RequiredPatchFields(NamedModel):
+    @field_validator("description", "tags", "content", "column_id", "position", check_fields=False)
+    @classmethod
+    def reject_null(cls, value):
+        if value is None:
+            raise ValueError("Поле не может быть null")
+        return value
+
+
+class TaskCreate(NamedModel):
     board_id: int
     column_id: UUID
     title: str
@@ -17,7 +35,7 @@ class TaskCreate(BaseModel):
     assignee_id: int | None = None
 
 
-class TaskUpdate(BaseModel):
+class TaskUpdate(RequiredPatchFields):
     title: str | None = None
     description: str | None = None
     column_id: UUID | None = None
@@ -51,7 +69,7 @@ class UserCreate(BaseModel):
     @field_validator("login")
     @classmethod
     def login_latin(cls, value: str) -> str:
-        if not LOGIN_PATTERN.match(value):
+        if not LOGIN_PATTERN.fullmatch(value):
             raise ValueError("Логин: только латиница, цифры и _")
         return value
 
@@ -118,22 +136,22 @@ class WorkspaceUpdate(WorkspaceCreate):
     pass
 
 
-class BoardCreate(BaseModel):
+class BoardCreate(NamedModel):
     title: str
     workspace_id: int
     folder_id: UUID | None = None
 
 
-class BoardUpdate(BaseModel):
+class BoardUpdate(NamedModel):
     title: str | None = None
     folder_id: UUID | None = None
 
 
-class ColumnCreate(BaseModel):
+class ColumnCreate(NamedModel):
     title: str = Field(min_length=1, max_length=120)
 
 
-class ColumnUpdate(BaseModel):
+class ColumnUpdate(RequiredPatchFields):
     title: str | None = Field(default=None, min_length=1, max_length=120)
     position: int | None = Field(default=None, ge=0)
 
@@ -165,26 +183,26 @@ class BoardWithTasks(BoardRead):
     tasks: list[TaskRead] = []
 
 
-class DocumentCreate(BaseModel):
+class DocumentCreate(NamedModel):
     title: str
     workspace_id: int
     folder_id: UUID | None = None
 
 
-class DocumentUpdate(BaseModel):
+class DocumentUpdate(RequiredPatchFields):
     title: str | None = None
     content: str | None = None
     folder_id: UUID | None = None
 
 
-class FolderCreate(BaseModel):
+class FolderCreate(NamedModel):
     workspace_id: int
     kind: Literal["board", "document"] = "board"
     parent_id: UUID | None = None
     title: str = Field(min_length=1, max_length=120)
 
 
-class FolderUpdate(BaseModel):
+class FolderUpdate(NamedModel):
     parent_id: UUID | None = None
     title: str | None = Field(default=None, min_length=1, max_length=120)
 
@@ -200,7 +218,7 @@ class FolderRead(BaseModel):
     created_at: datetime
 
 
-class DocumentVersionCreate(BaseModel):
+class DocumentVersionCreate(NamedModel):
     title: str
     content: str = ""
 
@@ -236,6 +254,9 @@ class ActivityRead(BaseModel):
     action: str
     entity_type: str
     entity_id: str | None
+    title: str
+    user_login: str
+    created_at: datetime
 
 
 class SearchResult(BaseModel):

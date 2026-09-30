@@ -276,23 +276,23 @@ async def save_document_version(
     author_id: int,
 ) -> Document:
     latest = document.versions[0] if document.versions else None
-    if (latest and latest.title == title and latest.content == content) or (
-        latest is None and document.title == title and document.content == content
-    ):
+    latest_matches = latest is not None and latest.title == title and latest.content == content
+    if document.title == title and document.content == content and (latest is None or latest_matches):
         return document
     now = datetime.utcnow()
     document.title = title
     document.content = content
     document.updated_at = now
-    db.add(
-        DocumentVersion(
-            document_id=document.id,
-            title=title,
-            content=content,
-            author_id=author_id,
-            created_at=now,
+    if not latest_matches:
+        db.add(
+            DocumentVersion(
+                document_id=document.id,
+                title=title,
+                content=content,
+                author_id=author_id,
+                created_at=now,
+            )
         )
-    )
     await db.commit()
     return await get_document(db, document.id)
 

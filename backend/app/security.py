@@ -12,7 +12,7 @@ from passlib.context import CryptContext
 
 from app.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto")
 
 SESSION_TTL_HOURS = 24
 
@@ -23,6 +23,10 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, hashed: str) -> bool:
     return pwd_context.verify(password, hashed)
+
+
+def verify_and_update_password(password: str, hashed: str) -> tuple[bool, str | None]:
+    return pwd_context.verify_and_update(password, hashed)
 
 
 def generate_token() -> str:

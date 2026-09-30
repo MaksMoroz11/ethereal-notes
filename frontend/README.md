@@ -22,3 +22,5 @@
 Production-сборка: `pnpm build`
 
 Проверка стиля: `pnpm lint`
+
+Регрессионные тесты: `pnpm test`

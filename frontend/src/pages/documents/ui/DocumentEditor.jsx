@@ -53,7 +53,7 @@ export default function DocumentEditor({ content, editable, onChange }) {
 
 	useEffect(() => {
 		if (!editor) return
-		editor.setEditable(editable)
+		editor.setEditable(editable, false)
 	}, [editor, editable])
 
 	useEffect(() => {

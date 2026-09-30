@@ -16,12 +16,14 @@ export default function ConfirmDialog({
 	cancelLabel = 'Отмена',
 	onConfirm,
 	onCancel,
+	busy = false,
+	error = '',
 }) {
 	return (
 		<Dialog
 			open={open}
 			onOpenChange={next => {
-				if (!next) onCancel?.()
+				if (!next && !busy) onCancel?.()
 			}}
 		>
 			<DialogContent showClose={false} className="border-l-4 border-l-destructive sm:max-w-md">
@@ -29,11 +31,12 @@ export default function ConfirmDialog({
 					<DialogTitle>{title}</DialogTitle>
 					{text ? <DialogDescription>{text}</DialogDescription> : null}
 				</DialogHeader>
+				{error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
 				<DialogFooter>
-					<Button type="button" variant="outline" onClick={onCancel}>
+					<Button type="button" variant="outline" disabled={busy} onClick={onCancel}>
 						{cancelLabel}
 					</Button>
-					<Button type="button" variant="destructive" onClick={onConfirm}>
+					<Button type="button" variant="destructive" disabled={busy} onClick={onConfirm}>
 						{confirmLabel}
 					</Button>
 				</DialogFooter>

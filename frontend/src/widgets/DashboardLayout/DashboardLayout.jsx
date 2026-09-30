@@ -17,15 +17,15 @@ export default function DashboardLayout() {
 	const closeMobileSidebar = useCallback(() => setMobileSidebarOpen(false), [])
 
 	useEffect(() => {
-		loadWorkspaces()
+		loadWorkspaces().catch(() => {})
 	}, [loadWorkspaces])
 
 	useEffect(() => {
 		if (!activeWorkspaceId) return
-		loadBoards(activeWorkspaceId)
-		loadDocuments(activeWorkspaceId)
-		loadFolders(activeWorkspaceId, 'board')
-		loadFolders(activeWorkspaceId, 'document')
+		loadBoards(activeWorkspaceId).catch(() => {})
+		loadDocuments(activeWorkspaceId).catch(() => {})
+		loadFolders(activeWorkspaceId, 'board').catch(() => {})
+		loadFolders(activeWorkspaceId, 'document').catch(() => {})
 	}, [activeWorkspaceId, loadBoards, loadDocuments, loadFolders])
 
 	return (
