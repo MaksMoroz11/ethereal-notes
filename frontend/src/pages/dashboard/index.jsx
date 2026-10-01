@@ -17,6 +17,7 @@ import {
 	DialogTitle,
 } from '@/components/ui/dialog'
 import KanbanCard from './ui/KanbanCard'
+import KanbanLayout from './ui/KanbanLayout'
 import Task from './ui/Task'
 
 export default function Dashboard() {
@@ -180,11 +181,11 @@ export default function Dashboard() {
 				<Button type="submit" variant="outline"><Plus />Колонка</Button>
 			</form> : null}
 			{actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
-			<div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),1fr))] items-start gap-4 pb-4">
+			<KanbanLayout>
 				{board.columns.map((column, index) => {
 					const tasks = board.tasks.filter(task => task.column_id === column.id)
 					const draft = drafts[column.id]
-					return <div key={column.id} className="flex min-h-48 min-w-0 flex-col gap-3 rounded-xl border border-border bg-muted p-3.5">
+					return <div key={column.id} className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-muted p-3.5">
 						<div className="flex min-w-0 items-center gap-1 text-sm font-semibold text-secondary-foreground">
 							{editingColumn?.id === column.id ? <form className="flex min-w-0 flex-1 gap-1" onSubmit={event => { event.preventDefault(); run(updateColumn(column.id, { title: editingColumn.title })); setEditingColumn(null) }}>
 								<Input autoFocus className="h-7 text-xs" value={editingColumn.title} onChange={event => setEditingColumn({ ...editingColumn, title: event.target.value })} />
@@ -218,7 +219,7 @@ export default function Dashboard() {
 						{isManager && !draft ? <Button type="button" variant="ghost" className="w-full justify-start text-xs text-muted-foreground" onClick={() => setDraft(column.id, { title: '', error: '' })}><Plus className="h-3.5 w-3.5" />Добавить задачу</Button> : null}
 					</div>
 				})}
-			</div>
+			</KanbanLayout>
 			<Dialog open={Boolean(openTask)} onOpenChange={open => !open && closeTask()}>
 				<DialogContent showClose={false} className="max-w-2xl border-0 bg-transparent p-0 shadow-none sm:max-w-2xl">
 					{openTask ? <Task key={openTask.id} task={openTask} columnTitle={openColumn?.title} readOnly={!isManager} onClose={closeTask} onChange={changes => updateTask(openTask.id, changes)} /> : null}

@@ -25,6 +25,7 @@ beforeEach(() => {
 	useWorkspaceStore.setState({ activeId: 1, workspaces: [{ id: 1, role: 'owner' }], members: [{ user_id: 1, login: 'owner' }, { user_id: 2, login: 'member' }] })
 	useDocumentsStore.setState({ documents: [document], activeId: document.id })
 	vi.stubGlobal('fetch', vi.fn())
+	vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
 })
 afterEach(() => setToken(null))
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
 	ChevronDown,
 	ChevronRight,
@@ -23,8 +23,30 @@ import {
 } from '@/components/ui/dropdown-menu'
 import SelectMenu from '@/components/ui/select-menu'
 import { cn } from '@/lib/utils'
+import ConfirmDialog from '@/shared/ui/ConfirmDialog/ConfirmDialog'
+import { folderSubtree } from '@/shared/lib/folderTree'
 
 const DRAG_TYPE = 'application/x-ethereal-folder-item'
+
+function HierarchyActions({ label, children }) {
+	const trigger = useRef(null)
+	const [placement, setPlacement] = useState({})
+	return <DropdownMenu onOpenChange={open => {
+		if (open) {
+			const rect = trigger.current.getBoundingClientRect()
+			setPlacement({ height: Math.max(1, window.innerHeight - rect.bottom - 14), offset: Math.min(20, window.innerWidth - rect.left - 208 - 8) })
+		}
+	}}>
+		<DropdownMenuTrigger asChild>
+			<button ref={trigger} type="button" aria-label={label} className="mr-1 rounded p-1 text-muted-foreground opacity-100 transition hover:bg-accent-foreground/10 hover:text-foreground focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+				<Ellipsis className="h-3.5 w-3.5" />
+			</button>
+		</DropdownMenuTrigger>
+		<DropdownMenuContent side="bottom" align="start" alignOffset={placement.offset ?? 20} sideOffset={6} avoidCollisions={false} style={{ maxHeight: placement.height }} className="w-52 min-w-0 max-w-[calc(100vw-16px)] overflow-y-auto">
+			{children}
+		</DropdownMenuContent>
+	</DropdownMenu>
+}
 
 export default function FolderTree({ folders, items, isDocs, isManager, activeId, onSelect, onCreateItem, onMoveItem, onDeleteItem }) {
 	const { createFolder, updateFolder, deleteFolder } = useFoldersStore()
@@ -35,6 +57,9 @@ export default function FolderTree({ folders, items, isDocs, isManager, activeId
 	const [error, setError] = useState('')
 	const [dragging, setDragging] = useState(null)
 	const [dropTarget, setDropTarget] = useState(null)
+	const [pendingDelete, setPendingDelete] = useState(null)
+	const [deleting, setDeleting] = useState(false)
+	const [deleteError, setDeleteError] = useState('')
 
 	function begin(action, item = null, parentId = null) {
 		setEditing({ action, item, parentId })
@@ -60,11 +85,15 @@ export default function FolderTree({ folders, items, isDocs, isManager, activeId
 	}
 
 	async function remove(folder) {
+		if (deleting) return
+		setDeleting(true)
+		setDeleteError('')
 		try {
-			await deleteFolder(folder.id)
+			await deleteFolder(folder.id, true)
+			setPendingDelete(null)
 		} catch (err) {
-			setError(err.message)
-		}
+			setDeleteError(err.message)
+		} finally { setDeleting(false) }
 	}
 
 	function getFolderPath(folder) {
@@ -162,18 +191,11 @@ export default function FolderTree({ folders, items, isDocs, isManager, activeId
 				{isDocs ? <FileText className="h-3.5 w-3.5 shrink-0" /> : <LayoutGrid className="h-3.5 w-3.5 shrink-0" />}
 				<span className="truncate">{item.title}</span>
 			</button>
-			{isManager ? <DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<button type="button" aria-label={`Действия: ${item.title}`} className="mr-1 rounded p-1 text-muted-foreground opacity-100 transition hover:bg-accent-foreground/10 hover:text-foreground focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-						<Ellipsis className="h-3.5 w-3.5" />
-					</button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent side="right" className="min-w-48">
+			{isManager ? <HierarchyActions label={`Действия: ${item.title}`}>
 					<DropdownMenuItem onSelect={() => begin('moveItem', item)}><FolderInput />Переместить в…</DropdownMenuItem>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => onDeleteItem(item)}><Trash2 />Удалить</DropdownMenuItem>
-				</DropdownMenuContent>
-			</DropdownMenu> : null}
+			</HierarchyActions> : null}
 		</li>)
 	}
 
@@ -200,22 +222,19 @@ export default function FolderTree({ folders, items, isDocs, isManager, activeId
 					<Folder className="h-3.5 w-3.5 shrink-0" />
 					<span className="truncate">{folder.title}</span>
 				</button>
-				{isManager ? <DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<button type="button" aria-label={`Действия папки: ${folder.title}`} className="mr-1 rounded p-1 text-muted-foreground opacity-100 transition hover:bg-accent-foreground/10 hover:text-foreground focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-							<Ellipsis className="h-3.5 w-3.5" />
-						</button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent side="right" className="min-w-52">
+				{isManager ? <HierarchyActions label={`Действия папки: ${folder.title}`}>
 						<DropdownMenuItem onSelect={() => begin('createItem', null, folder.id)}>{isDocs ? <FileText /> : <LayoutGrid />}Создать {isDocs ? 'документ' : 'доску'}</DropdownMenuItem>
 						<DropdownMenuItem onSelect={() => begin('createFolder', null, folder.id)}><Plus />Создать подпапку</DropdownMenuItem>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem onSelect={() => begin('rename', folder)}><Pencil />Переименовать</DropdownMenuItem>
 						<DropdownMenuItem onSelect={() => begin('moveFolder', folder)}><FolderInput />Переместить в…</DropdownMenuItem>
 						<DropdownMenuSeparator />
-						<DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => remove(folder)}><Trash2 />Удалить папку</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu> : null}
+						<DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => {
+							const ids = folderSubtree(folders, folder.id)
+							setDeleteError('')
+							setPendingDelete({ ...folder, folderCount: ids.size - 1, itemCount: items.filter(item => ids.has(item.folder_id)).length })
+						}}><Trash2 />Удалить папку</DropdownMenuItem>
+					</HierarchyActions> : null}
 			</div>
 			{expanded ? <ul>
 				{folders.filter(item => item.parent_id === folder.id).sort((a, b) => a.title.localeCompare(b.title)).map(child => renderFolder(child, depth + 1))}
@@ -248,5 +267,9 @@ export default function FolderTree({ folders, items, isDocs, isManager, activeId
 			{renderItems(null, 0)}
 			{!folders.length && !items.length ? <li className="px-2 py-2 text-xs text-muted-foreground">Пока пусто</li> : null}
 		</ul>
+		<ConfirmDialog open={Boolean(pendingDelete)} title="Удалить папку и содержимое?"
+			text={pendingDelete ? `«${pendingDelete.title}» будет удалена без возможности восстановления. Подпапок: ${pendingDelete.folderCount}. ${isDocs ? 'Документов' : 'Досок'}: ${pendingDelete.itemCount}. ${isDocs ? 'Все версии документов' : 'Все колонки и задачи досок'} внутри папки также будут удалены.` : ''}
+			confirmLabel="Удалить папку и содержимое" busy={deleting} error={deleteError}
+			onConfirm={() => pendingDelete && remove(pendingDelete)} onCancel={() => setPendingDelete(null)} />
 	</div>
 }

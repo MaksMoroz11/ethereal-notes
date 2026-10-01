@@ -5,6 +5,7 @@ import { api } from '@/shared/api/client'
 import { formatLocalDate, parseUtcDate } from '@/shared/lib/date'
 
 const LABELS = {
+	'folder.delete': 'удалил папку вместе с содержимым',
 	'workspace.create': 'создал пространство',
 	'workspace.rename': 'переименовал пространство',
 	'board.create': 'создал доску',
@@ -22,6 +23,7 @@ const LABELS = {
 }
 
 const ACTION_GROUPS = {
+	'folder.delete': 'Удаление',
 	'workspace.create': 'Создание',
 	'workspace.rename': 'Изменение',
 	'board.create': 'Создание',

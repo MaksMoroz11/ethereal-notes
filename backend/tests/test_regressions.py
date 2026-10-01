@@ -95,6 +95,57 @@ def test_registration_requires_four_characters(client):
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize("kind", ["board", "document"])
+def test_recursive_folder_deletion_is_confirmed_scoped_and_removes_dependents(client, users, kind):
+    owner, member, outsider = users(), users(), users()
+    headers = auth_header(owner)
+    workspace = client.get("/workspaces", headers=headers).json()[0]["id"]
+    client.post(f"/workspaces/{workspace}/members", headers=headers, json={"login": member["login"]})
+
+    def folder(title, parent=None, folder_kind=kind):
+        result = client.post("/folders", headers=headers, json={"workspace_id": workspace, "kind": folder_kind, "title": title, "parent_id": parent})
+        assert result.status_code == 201
+        return result.json()
+
+    root = folder("Legacy")
+    child = folder("Nested", root["id"])
+    leaf = folder("Leaf", child["id"])
+    sibling = folder("Keep")
+    other_kind = folder("Other kind", folder_kind="document" if kind == "board" else "board")
+    path = f"/folders/{root['id']}"
+    entity_path = "/boards" if kind == "board" else "/documents"
+
+    def entity(folder_id):
+        result = client.post(entity_path, headers=headers, json={"workspace_id": workspace, "title": "Content", "folder_id": folder_id})
+        assert result.status_code == 201
+        return result.json()
+
+    contents = [entity(root["id"]), entity(child["id"]), entity(leaf["id"])]
+    keep = entity(sibling["id"])
+    if kind == "board":
+        column = add_column(client, contents[0], headers)
+        task = client.post("/tasks", headers=headers, json={"board_id": contents[0]["id"], "column_id": column["id"], "title": "Hidden task", "assignee_id": member["id"]}).json()
+        assert client.get(f"/boards/{contents[0]['id']}", headers=headers).json()["tasks"] == []
+    else:
+        assert client.post(f"/documents/{contents[0]['id']}/versions", headers=headers, json={"title": "Snapshot", "content": "Old documentation"}).status_code == 200
+
+    assert client.delete(path + "?recursive=true", headers=auth_header(outsider)).status_code == 404
+    assert client.delete(path + "?recursive=true", headers=auth_header(member)).status_code == 403
+    assert client.delete(path, headers=headers).status_code == 400
+    assert client.get(entity_path + f"/{contents[0]['id']}", headers=headers).status_code == 200
+    assert client.delete(path + "?recursive=true", headers=headers).status_code == 204
+    remaining = client.get(f"/folders?workspace_id={workspace}&kind={kind}", headers=headers).json()
+    assert [item["id"] for item in remaining] == [sibling["id"]]
+    assert other_kind["id"] in [item["id"] for item in client.get(f"/folders?workspace_id={workspace}&kind={other_kind['kind']}", headers=headers).json()]
+    for content in contents:
+        assert client.get(entity_path + f"/{content['id']}", headers=headers).status_code == 404
+    assert client.get(entity_path + f"/{keep['id']}", headers=headers).status_code == 200
+    if kind == "board":
+        assert client.get(f"/tasks/{task['id']}", headers=headers).status_code == 404
+    events = client.get(f"/workspaces/{workspace}/activity", headers=headers).json()
+    assert any(event["action"] == "folder.delete" and event["entity_id"] == root["id"] for event in events)
+
+
 def test_login_upgrades_legacy_hash_without_breaking_session(client, users):
     user = users()
     legacy = CryptContext(schemes=["bcrypt"]).hash("old")

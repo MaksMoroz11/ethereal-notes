@@ -30,6 +30,7 @@ export const useDocumentsStore = create((set, get) => {
 	const draftFor = id => get().drafts[id] || readDraft(userId(), id) || documentFor(id)
 	const status = (id, value, error = '') => set(state => ({ statuses: { ...state.statuses, [id]: value }, saveErrors: { ...state.saveErrors, [id]: error } }))
 	function accept(document) {
+		if (deletedRecords.has(document.id)) return document
 		records.set(document.id, document)
 		recordChanges.set(document.id, ++mutationRevision)
 		set(state => ({ documents: state.documents.map(doc => doc.id === document.id ? document : doc) }))
@@ -79,6 +80,19 @@ export const useDocumentsStore = create((set, get) => {
 			if (workspaceRequestIsCurrent(workspaceId, session)) set(state => ({ documents: [document, ...state.documents.filter(doc => doc.id !== document.id)], activeId: document.id }))
 		},
 		selectDocument: id => set({ activeId: id }),
+		removeDocumentsInFolders: folderIds => {
+			const ids = new Set([...records.values(), ...get().documents].filter(doc => folderIds.has(doc.folder_id)).map(doc => doc.id))
+			for (const id of ids) {
+				deletedRecords.add(id)
+				recordChanges.set(id, ++mutationRevision)
+				records.delete(id)
+				discardDraft(id, userId())
+			}
+			set(state => {
+				const documents = state.documents.filter(doc => !ids.has(doc.id))
+				return { documents, activeId: ids.has(state.activeId) ? documents[0]?.id ?? null : state.activeId }
+			})
+		},
 		editDraft: (id, changes) => {
 			if (get().restoring[id]) return
 			const current = draftFor(id)
@@ -111,6 +125,7 @@ export const useDocumentsStore = create((set, get) => {
 					status(id, 'saving')
 					try {
 						const saved = await api(`/documents/${id}/versions`, { method: 'POST', body: snapshot })
+						if (deletedRecords.has(id)) return saved
 						accept(saved)
 						const latestDraft = draftFor(id)
 						if (sameSnapshot(snapshotOf(latestDraft), snapshot)) {

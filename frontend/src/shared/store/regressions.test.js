@@ -22,6 +22,44 @@ function prepare() {
 }
 beforeEach(prepare)
 
+it('removes a deleted folder subtree, its documents and drafts without accepting late save responses', async () => {
+	const saving = deferred()
+	const root = { id: 'root', parent_id: null }, child = { id: 'child', parent_id: 'root' }, sibling = { id: 'sibling', parent_id: null }
+	const removed = { ...document, folder_id: child.id }
+	const kept = { ...document, id: 'kept', folder_id: sibling.id }
+	useDocumentsStore.setState({ documents: [removed, kept] })
+	useFoldersStore.setState({ documentFolders: [root, child, sibling] })
+	useDocumentsStore.getState().editDraft(document.id, { content: 'Draft' })
+	fetch.mockReturnValueOnce(saving.promise).mockResolvedValueOnce(new Response(null, { status: 204 }))
+	const save = useDocumentsStore.getState().saveDraft(document.id)
+	await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+	await useFoldersStore.getState().deleteFolder(root.id, true)
+	expect(fetch.mock.calls[1][0]).toContain('?recursive=true')
+	expect(useFoldersStore.getState().documentFolders).toEqual([sibling])
+	expect(useDocumentsStore.getState().documents).toEqual([kept])
+	expect(readDraft(1, document.id)).toBeNull()
+	saving.resolve(response({ ...removed, content: 'Draft' }))
+	await save
+	expect(useDocumentsStore.getState().documents).toEqual([kept])
+	await useDocumentsStore.getState().saveDraft(document.id)
+	expect(fetch).toHaveBeenCalledTimes(2)
+})
+
+it('leaves folders, boards and drafts intact if recursive deletion fails', async () => {
+	const folder = { id: 'root', parent_id: null }
+	const board = { id: 10, folder_id: folder.id }
+	useFoldersStore.setState({ boardFolders: [folder] })
+	useBoardsStore.setState({ boards: [board], activeId: board.id })
+	fetch.mockResolvedValueOnce(response({ detail: 'Forbidden' }, 403))
+	await expect(useFoldersStore.getState().deleteFolder(folder.id, true)).rejects.toThrow('Forbidden')
+	expect(useFoldersStore.getState().boardFolders).toEqual([folder])
+	expect(useBoardsStore.getState().boards).toEqual([board])
+	fetch.mockResolvedValueOnce(new Response(null, { status: 204 }))
+	await useFoldersStore.getState().deleteFolder(folder.id, true)
+	expect(useBoardsStore.getState().boards).toEqual([])
+	expect(useBoardsStore.getState().activeId).toBeNull()
+})
+
 describe('workspace and session isolation', () => {
 	for (const [store, method, key] of [
 		[useDocumentsStore, 'loadDocuments', 'documents'],

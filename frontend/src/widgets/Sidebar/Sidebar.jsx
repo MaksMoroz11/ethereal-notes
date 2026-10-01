@@ -36,6 +36,7 @@ const ACTIVITY_ENTITIES = [
 	{ value: 'board', label: 'Доска' },
 	{ value: 'task', label: 'Задача' },
 	{ value: 'document', label: 'Документ' },
+	{ value: 'folder', label: 'Папка' },
 	{ value: 'member', label: 'Участник' },
 ]
 

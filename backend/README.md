@@ -120,6 +120,7 @@
 - DELETE /boards/{id} - удалить доску вместе с её задачами
 - POST/PATCH/DELETE /boards/{id}/columns - управление колонками
 - GET/POST/PATCH/DELETE /folders - вложенные папки досок и документов
+- DELETE /folders/{id}?recursive=true - подтверждённое удаление папки со всеми подпапками, досками и задачами либо документами и версиями. Без `recursive=true` непустая папка не удаляется.
 - GET /search?workspace_id=&q= - поиск по задачам и документам
 - POST /tasks - создать задачу
 - GET /tasks?board_id= - задачи доски

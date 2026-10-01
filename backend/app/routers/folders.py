@@ -1,12 +1,12 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import access
 from app.database import get_db
-from app.models import Board, Document, Folder, User
+from app.models import ActivityLog, Board, BoardColumn, Document, DocumentVersion, Folder, Task, User
 from app.routers.auth import get_current_user
 from app.schemas import FolderCreate, FolderRead, FolderUpdate
 
@@ -68,16 +68,38 @@ async def update_folder(folder_id: UUID, data: FolderUpdate, db: AsyncSession = 
 
 @router.delete("/{folder_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_folder(folder_id: UUID, db: AsyncSession = Depends(get_db),
-                        user: User = Depends(get_current_user)):
+                        user: User = Depends(get_current_user), recursive: bool = False):
     folder = await db.get(Folder, folder_id)
     if folder is None:
         raise HTTPException(status_code=404, detail="Папка не найдена")
     await access.require_manager(db, folder.workspace_id, user)
     linked_models = [(Folder, Folder.parent_id)]
     linked_models.append((Board, Board.folder_id) if folder.kind == "board" else (Document, Document.folder_id))
-    for model, field in linked_models:
-        found = await db.scalar(select(model.id).where(field == folder.id).limit(1))
-        if found is not None:
-            raise HTTPException(status_code=400, detail="Папка не пуста")
-    await db.delete(folder)
+    if not recursive:
+        for model, field in linked_models:
+            found = await db.scalar(select(model.id).where(field == folder.id).limit(1))
+            if found is not None:
+                raise HTTPException(status_code=400, detail="Папка не пуста. Подтвердите удаление содержимого")
+
+    folders = list((await db.scalars(select(Folder).where(
+        Folder.workspace_id == folder.workspace_id, Folder.kind == folder.kind))).all())
+    levels = [[folder.id]]
+    subtree = {folder.id}
+    while children := [item.id for item in folders if item.parent_id in levels[-1] and item.id not in subtree]:
+        levels.append(children)
+        subtree.update(children)
+
+    if folder.kind == "board":
+        board_ids = select(Board.id).where(Board.folder_id.in_(subtree), Board.workspace_id == folder.workspace_id)
+        await db.execute(delete(Task).where(Task.board_id.in_(board_ids)))
+        await db.execute(delete(BoardColumn).where(BoardColumn.board_id.in_(board_ids)))
+        await db.execute(delete(Board).where(Board.id.in_(board_ids)))
+    else:
+        document_ids = select(Document.id).where(Document.folder_id.in_(subtree), Document.workspace_id == folder.workspace_id)
+        await db.execute(delete(DocumentVersion).where(DocumentVersion.document_id.in_(document_ids)))
+        await db.execute(delete(Document).where(Document.id.in_(document_ids)))
+    db.add(ActivityLog(workspace_id=folder.workspace_id, user_id=user.id,
+                       action="folder.delete", entity_type="folder", entity_id=str(folder.id), title=folder.title))
+    for level in reversed(levels):
+        await db.execute(delete(Folder).where(Folder.id.in_(level)))
     await db.commit()
