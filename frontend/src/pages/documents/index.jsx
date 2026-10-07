@@ -7,6 +7,7 @@ import { readDraft, snapshotOf, sameSnapshot } from '@/shared/lib/documentDrafts
 import ConfirmDialog from '@/shared/ui/ConfirmDialog/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { formatLocalDate } from '@/shared/lib/date'
 import DocumentEditor from './ui/DocumentEditor'
@@ -136,7 +137,7 @@ function DocumentWorkspace({ doc, isManager }) {
 					{preview || !isManager ? null : (
 						<div className="flex flex-wrap items-center justify-end gap-3">
 							<label className="flex items-center gap-2 text-[0.7rem] text-muted-foreground/80">
-								<input type="checkbox" checked={autoSave} onChange={toggleAutoSave} />
+								<Checkbox checked={autoSave} onChange={toggleAutoSave} />
 								{documentText.autoSave}
 							</label>
 							<span className="text-[0.7rem] uppercase tracking-wide text-muted-foreground/80">{statusLabel}</span>

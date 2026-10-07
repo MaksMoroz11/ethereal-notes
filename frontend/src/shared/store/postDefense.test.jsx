@@ -105,9 +105,10 @@ it('preserves a draft during a remote update', async () => {
 
 it('requires an unchecked separate consent before registering', async () => {
 	useAuthStore.setState({ user: null, authenticated: false, validated: true })
+	fetch.mockImplementation(() => Promise.resolve(response({ code: 'unauthorized' }, 401)))
 	usePrivacyStore.setState({ config: { consent_version: '2026-10-07' }, error: '' })
 	render(<MemoryRouter initialEntries={['/login?mode=register']}><Login /></MemoryRouter>)
-	const checkbox = screen.getByRole('checkbox', { name: 'Я даю согласие на обработку персональных данных' })
+	const checkbox = await screen.findByRole('checkbox', { name: 'Я даю согласие на обработку персональных данных' })
 	expect(checkbox).not.toBeChecked()
 	expect(screen.getByRole('button', { name: 'Создать аккаунт' })).toBeDisabled()
 	fireEvent.click(checkbox)

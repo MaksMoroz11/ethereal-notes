@@ -6,12 +6,28 @@ import { Button } from '@/components/ui/button'
 import UserMenu from './UserMenu'
 import NotificationBell from './NotificationBell'
 import { cn } from '@/lib/utils'
+import { authText } from '@/shared/messages/auth'
 
 export default function Header({ fluid = false, onMenuClick }) {
 	const user = useAuthStore(state => state.user)
 	const validated = useAuthStore(state => state.validated)
+	const validating = useAuthStore(state => state.validating)
+	const sessionError = useAuthStore(state => state.error)
 	const validateSession = useAuthStore(state => state.validateSession)
 	useEffect(() => { if (!validated) validateSession() }, [validated, validateSession])
+	useEffect(() => {
+		const refresh = () => { if (!document.hidden) validateSession({ force: true }) }
+		window.addEventListener('focus', refresh)
+		window.addEventListener('online', refresh)
+		window.addEventListener('pageshow', refresh)
+		document.addEventListener('visibilitychange', refresh)
+		return () => {
+			window.removeEventListener('focus', refresh)
+			window.removeEventListener('online', refresh)
+			window.removeEventListener('pageshow', refresh)
+			document.removeEventListener('visibilitychange', refresh)
+		}
+	}, [validateSession])
 	const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
 
 	useEffect(() => {
@@ -48,7 +64,10 @@ export default function Header({ fluid = false, onMenuClick }) {
 					>
 						{theme === 'dark' ? <Sun /> : <Moon />}
 					</Button>
-					{user ? (
+					{!user && (!validated || validating) ? (
+						sessionError ? <Button variant="ghost" onClick={() => validateSession({ force: true })}>{authText.retry}</Button>
+							: <span role="status" className="text-xs text-muted-foreground">{authText.checkingSession}</span>
+					) : user ? (
 						<><NotificationBell /><UserMenu login={user.login} /></>
 					) : (
 						<Button asChild variant="ghost">

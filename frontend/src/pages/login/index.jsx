@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/shared/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { authText } from '@/shared/messages/auth'
 import { usePrivacyStore } from '@/shared/store/privacyStore'
@@ -11,15 +12,16 @@ const LOGIN_PATTERN = /^[A-Za-z0-9_]+$/
 
 export default function Login() {
 	const navigate = useNavigate()
-	const [searchParams] = useSearchParams()
+	const [searchParams, setSearchParams] = useSearchParams()
 	const register = useAuthStore(state => state.register)
 	const login = useAuthStore(state => state.login)
 	const authenticated = useAuthStore(state => state.authenticated)
 	const validated = useAuthStore(state => state.validated)
+	const validating = useAuthStore(state => state.validating)
 	const sessionError = useAuthStore(state => state.error)
 	const validateSession = useAuthStore(state => state.validateSession)
 
-	const [mode, setMode] = useState(searchParams.get('mode') === 'register' ? 'register' : 'login')
+	const mode = searchParams.get('mode') === 'register' ? 'register' : 'login'
 	const [loginValue, setLoginValue] = useState('')
 	const [password, setPassword] = useState('')
 	const [error, setError] = useState('')
@@ -29,7 +31,8 @@ export default function Login() {
 	const privacy = usePrivacyStore(state => state.config)
 	const loadPrivacy = usePrivacyStore(state => state.load)
 	const privacyError = usePrivacyStore(state => state.error)
-	useEffect(() => { if (!validated) validateSession() }, [validated, validateSession])
+	useEffect(() => { if (!useAuthStore.getState().authenticated) validateSession({ force: true }) }, [validateSession])
+	useEffect(() => { setError(''); setConsent(false) }, [mode])
 	useEffect(() => { if (validated && !authenticated && mode === 'register' && !privacy) loadPrivacy() }, [validated, authenticated, mode, privacy, loadPrivacy])
 
 	async function submit(e) {
@@ -60,7 +63,7 @@ export default function Login() {
 		}
 	}
 
-	if (!validated) return <div className="px-8 py-12 text-center text-sm">
+	if (!validated || (validating && !authenticated)) return <div className="px-8 py-12 text-center text-sm">
 		{sessionError ? <><p>{sessionError}</p><button type="button" onClick={validateSession}>{authText.retry}</button></> : authText.checkingSession}
 	</div>
 	if (authenticated) return <Navigate to="/dashboard" replace />
@@ -94,9 +97,9 @@ export default function Login() {
 						/>
 					</div>
 
-					<label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={remember} onChange={event => setRemember(event.target.checked)} />{authText.remember}</label>
+					<label className="flex items-center gap-2 text-sm"><Checkbox checked={remember} onChange={event => setRemember(event.target.checked)} />{authText.remember}</label>
 					{mode === 'register' ? <div className="space-y-2 text-sm">
-						<label className="flex items-start gap-2"><input className="mt-1" type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} />{authText.consentLabel}</label>
+						<label className="flex items-start gap-2"><Checkbox className="mt-1" checked={consent} onChange={event => setConsent(event.target.checked)} />{authText.consentLabel}</label>
 						<p><Link to="/consent" target="_blank" className="text-primary underline">{authText.consentLink}</Link> · <Link to="/privacy" target="_blank" className="text-primary underline">{authText.policyLink}</Link></p>
 						{privacyError ? <p className="text-destructive">{privacyError} <button type="button" className="underline" onClick={loadPrivacy}>{authText.retry}</button></p> : null}
 					</div> : null}
@@ -112,7 +115,7 @@ export default function Login() {
 					variant="link"
 					className="mt-4 px-0"
 					onClick={() => {
-						setMode(mode === 'login' ? 'register' : 'login')
+						setSearchParams(mode === 'login' ? { mode: 'register' } : {})
 						setError('')
 						setConsent(false)
 					}}
