@@ -8,6 +8,7 @@ import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 import { useDocumentsStore } from '@/shared/store/documentsStore'
 import { useBoardsStore } from '@/shared/store/boardsStore'
 import { draftKey } from '@/shared/lib/documentDrafts'
+import { formatLocalDate } from '@/shared/lib/date'
 import { document, deferred, response } from '@/test/fixtures'
 import Documents from './documents'
 import Dashboard from './dashboard'
@@ -92,7 +93,9 @@ it('confirms a restore without deleting history and shows the source version of 
 	expect(screen.getByLabelText('Текст документа')).toHaveValue('First')
 	expect(screen.getAllByRole('button', { name: 'Откатить' })).toHaveLength(3)
 	await userEvent.click(screen.getByRole('button', { name: 'Восстановлена из v1' }))
-	expect(screen.getByText(/Просмотр версии от 29.09.2026/)).toBeInTheDocument()
+	expect(screen.getByText(/^Просмотр версии от /)).toHaveTextContent(formatLocalDate(first.created_at, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }))
+	expect(screen.getByLabelText('Текст документа')).toHaveValue(first.content)
+	expect(screen.getByLabelText('Текст документа')).toHaveAttribute('readonly')
 })
 
 for (const view of ['self', 'all', '2']) {
