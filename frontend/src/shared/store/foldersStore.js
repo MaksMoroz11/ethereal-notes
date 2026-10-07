@@ -4,12 +4,23 @@ import { useWorkspaceStore, workspaceRequestIsCurrent } from './workspaceStore'
 import { useBoardsStore } from './boardsStore'
 import { useDocumentsStore } from './documentsStore'
 import { folderSubtree } from '../lib/folderTree'
+import { reconcile } from '../lib/reconcile'
 
 let requests = { board: 0, document: 0 }
 export const useFoldersStore = create((set, get) => ({
 	boardFolders: [],
 	documentFolders: [],
 	error: '',
+    loadFolder: async id => {
+        const workspaceId = useWorkspaceStore.getState().activeId
+        const session = getSessionVersion()
+        const before = [...get().boardFolders, ...get().documentFolders].find(item => item.id === id)
+        const folder = await api(`/folders/${id}`, { silent: true })
+        if (!workspaceRequestIsCurrent(workspaceId, session)) return
+        const key = folder.kind === 'document' ? 'documentFolders' : 'boardFolders'
+        if (get()[key].find(item => item.id === id) !== before) return
+        set(state => ({ [key]: reconcile(state[key], before ? state[key].map(item => item.id === id ? folder : item) : [...state[key], folder]) }))
+    },
 	loadFolders: async (workspaceId, kind = 'board') => {
 		const id = workspaceId ?? useWorkspaceStore.getState().activeId
 		const key = kind === 'document' ? 'documentFolders' : 'boardFolders'

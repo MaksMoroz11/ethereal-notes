@@ -4,25 +4,11 @@ import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 import { api } from '@/shared/api/client'
 import { formatLocalDate, parseUtcDate } from '@/shared/lib/date'
 
-const LABELS = {
-	'folder.delete': 'удалил папку вместе с содержимым',
-	'workspace.create': 'создал пространство',
-	'workspace.rename': 'переименовал пространство',
-	'board.create': 'создал доску',
-	'board.delete': 'удалил доску',
-	'task.create': 'создал задачу',
-	'task.update': 'обновил задачу',
-	'task.delete': 'удалил задачу',
-	'document.create': 'создал документ',
-	'document.version': 'сохранил версию',
-	'document.restore': 'откатил документ',
-	'document.delete': 'удалил документ',
-	'member.invite': 'пригласил',
-	'member.kick': 'удалил участника',
-	'member.role': 'изменил роль участника',
-}
+import { activityLabels as LABELS } from '@/shared/messages/workspaces'
+
 
 const ACTION_GROUPS = {
+	'column.create': 'Создание', 'column.update': 'Изменение', 'column.delete': 'Удаление',
 	'folder.delete': 'Удаление',
 	'workspace.create': 'Создание',
 	'workspace.rename': 'Изменение',
@@ -30,6 +16,10 @@ const ACTION_GROUPS = {
 	'board.delete': 'Удаление',
 	'task.create': 'Создание',
 	'task.update': 'Изменение',
+	'task.move': 'Изменение',
+	'document.update': 'Изменение',
+	'folder.update': 'Изменение',
+	'board.update': 'Изменение',
 	'task.delete': 'Удаление',
 	'document.create': 'Создание',
 	'document.version': 'Версионирование',
@@ -66,6 +56,7 @@ export default function Activity() {
 
 function ActivityFeed({ workspaceId }) {
 	const [searchParams] = useSearchParams()
+	const activityRevision = useWorkspaceStore(state => state.activityRevision)
 	const [items, setItems] = useState([])
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState('')
@@ -91,7 +82,7 @@ function ActivityFeed({ workspaceId }) {
 		return () => {
 			cancelled = true
 		}
-	}, [workspaceId])
+	}, [workspaceId, activityRevision])
 
 	const filteredItems = useMemo(() => {
 		const periodStart = periodFilter === 'today'

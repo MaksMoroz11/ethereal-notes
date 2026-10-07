@@ -32,6 +32,8 @@ export default function Footer() {
 				<div className="flex gap-12">
 					<div className="flex flex-col gap-2">
 						<h4 className="text-sm font-semibold text-foreground">Проект</h4>
+						<Link to="/privacy" className="text-sm text-muted-foreground hover:text-foreground">Политика обработки данных</Link>
+						<Link to="/consent" className="text-sm text-muted-foreground hover:text-foreground">Согласие</Link>
 						<SectionLink id="features" icon={Sparkles}>Возможности</SectionLink>
 						<Link to="/documentation" className="text-sm text-muted-foreground transition hover:text-foreground">
 							<FileText className="mr-1.5 inline h-3.5 w-3.5" />

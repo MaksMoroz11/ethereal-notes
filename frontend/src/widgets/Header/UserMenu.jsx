@@ -15,9 +15,8 @@ export default function UserMenu({ login }) {
 	const navigate = useNavigate()
 	const logout = useAuthStore(state => state.logout)
 
-	function handleLogout() {
-		logout()
-		navigate('/login')
+	async function handleLogout() {
+		try { await logout(); navigate('/login') } catch { /* The request shows the error. */ }
 	}
 
 	return (

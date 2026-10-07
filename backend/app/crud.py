@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,7 +18,7 @@ async def create_user(db: AsyncSession, data: UserCreate, password: str) -> User
     db.add(workspace)
     await db.flush()
     db.add(WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role="owner"))
-    await db.commit()
+    await db.flush()
     await db.refresh(user)
     return user
 
@@ -37,14 +37,15 @@ async def get_user_by_login(db: AsyncSession, login: str) -> User | None:
     return result.scalar_one_or_none()
 
 
-async def create_session(db: AsyncSession, user: User) -> Session:
+async def create_session(db: AsyncSession, user: User, remember: bool = False) -> Session:
     session = Session(
         token=generate_token(),
+        csrf_token=generate_token(),
         user_id=user.id,
-        expires_at=datetime.utcnow() + timedelta(hours=SESSION_TTL_HOURS),
+        expires_at=datetime.utcnow() + (timedelta(days=30) if remember else timedelta(hours=SESSION_TTL_HOURS)),
     )
     db.add(session)
-    await db.commit()
+    await db.flush()
     await db.refresh(session)
     return session
 
@@ -58,7 +59,7 @@ async def get_session_by_token(db: AsyncSession, token: str) -> Session | None:
 
 async def delete_session(db: AsyncSession, session: Session) -> None:
     await db.delete(session)
-    await db.commit()
+    await db.flush()
 
 
 _workspace_load = (
@@ -90,13 +91,13 @@ async def create_workspace(db: AsyncSession, name: str, owner_id: int) -> Worksp
     db.add(workspace)
     await db.flush()
     db.add(WorkspaceMember(workspace_id=workspace.id, user_id=owner_id, role="owner"))
-    await db.commit()
+    await db.flush()
     return await get_workspace(db, workspace.id)
 
 
 async def update_workspace(db: AsyncSession, workspace: Workspace, name: str) -> Workspace:
     workspace.name = name
-    await db.commit()
+    await db.flush()
     return await get_workspace(db, workspace.id)
 
 
@@ -112,7 +113,7 @@ async def delete_workspace(db: AsyncSession, workspace_id: int) -> None:
     await db.execute(delete(Folder).where(Folder.workspace_id == workspace_id))
     await db.execute(delete(WorkspaceMember).where(WorkspaceMember.workspace_id == workspace_id))
     await db.execute(delete(Workspace).where(Workspace.id == workspace_id))
-    await db.commit()
+    await db.flush()
 
 
 async def get_membership(
@@ -132,27 +133,27 @@ async def add_workspace_member(
 ) -> WorkspaceMember:
     member = WorkspaceMember(workspace_id=workspace_id, user_id=user_id, role=role)
     db.add(member)
-    await db.commit()
+    await db.flush()
     return member
 
 
 async def delete_workspace_member(db: AsyncSession, member: WorkspaceMember) -> None:
     await db.delete(member)
-    await db.commit()
+    await db.flush()
 
 
 async def update_workspace_member_role(
     db: AsyncSession, member: WorkspaceMember, role: str
 ) -> WorkspaceMember:
     member.role = role
-    await db.commit()
+    await db.flush()
     return member
 
 
 async def create_board(db: AsyncSession, title: str, owner_id: int, workspace_id: int, folder_id: UUID | None = None) -> Board:
     board = Board(title=title, owner_id=owner_id, workspace_id=workspace_id, folder_id=folder_id)
     db.add(board)
-    await db.commit()
+    await db.flush()
     return await get_board(db, board.id)
 
 
@@ -174,9 +175,10 @@ async def get_board(db: AsyncSession, board_id: int) -> Board | None:
 
 
 async def update_board(db: AsyncSession, board: Board, data: BoardUpdate) -> Board:
-    for field, value in data.model_dump(exclude_unset=True).items():
+    for field, value in data.model_dump(exclude_unset=True, exclude={"expected_revision"}).items():
         setattr(board, field, value)
-    await db.commit()
+    await db.flush()
+    await bump_board(db, board.id)
     await db.refresh(board)
     return board
 
@@ -185,14 +187,15 @@ async def delete_board(db: AsyncSession, board: Board) -> None:
     await db.execute(delete(Task).where(Task.board_id == board.id))
     await db.execute(delete(BoardColumn).where(BoardColumn.board_id == board.id))
     await db.execute(delete(Board).where(Board.id == board.id))
-    await db.commit()
+    await db.flush()
 
 
 async def create_task(db: AsyncSession, data: TaskCreate, author_id: int) -> Task:
     uid = await db.scalar(text("SELECT nextval('task_uid_seq')"))
     task = Task(**data.model_dump(), uid=str(uid), author_id=author_id)
     db.add(task)
-    await db.commit()
+    await db.flush()
+    await bump_board(db, task.board_id)
     await db.refresh(task)
     return task
 
@@ -210,16 +213,18 @@ async def get_task(db: AsyncSession, task_id: UUID) -> Task | None:
 
 
 async def update_task(db: AsyncSession, task: Task, data: TaskUpdate) -> Task:
-    for field, value in data.model_dump(exclude_unset=True).items():
+    for field, value in data.model_dump(exclude_unset=True, exclude={"expected_revision"}).items():
         setattr(task, field, value)
-    await db.commit()
+    await db.flush()
+    await bump_board(db, task.board_id)
     await db.refresh(task)
     return task
 
 
 async def delete_task(db: AsyncSession, task: Task) -> None:
+    await bump_board(db, task.board_id)
     await db.delete(task)
-    await db.commit()
+    await db.flush()
 
 
 _document_load = (
@@ -231,7 +236,7 @@ _document_load = (
 async def create_document(db: AsyncSession, title: str, owner_id: int, workspace_id: int, folder_id: UUID | None = None) -> Document:
     document = Document(title=title, content="", owner_id=owner_id, workspace_id=workspace_id, folder_id=folder_id)
     db.add(document)
-    await db.commit()
+    await db.flush()
     return await get_document(db, document.id)
 
 
@@ -256,16 +261,16 @@ async def get_document(db: AsyncSession, document_id: UUID) -> Document | None:
 
 
 async def update_document(db: AsyncSession, document: Document, data: DocumentUpdate) -> Document:
-    for field, value in data.model_dump(exclude_unset=True).items():
+    for field, value in data.model_dump(exclude_unset=True, exclude={"expected_revision"}).items():
         setattr(document, field, value)
     document.updated_at = datetime.utcnow()
-    await db.commit()
+    await db.flush()
     return await get_document(db, document.id)
 
 
 async def delete_document(db: AsyncSession, document: Document) -> None:
     await db.delete(document)
-    await db.commit()
+    await db.flush()
 
 
 async def save_document_version(
@@ -293,7 +298,7 @@ async def save_document_version(
                 created_at=now,
             )
         )
-    await db.commit()
+    await db.flush()
     return await get_document(db, document.id)
 
 
@@ -316,7 +321,7 @@ async def restore_document_version(
     document.title = version.title
     document.content = version.content
     document.updated_at = datetime.utcnow()
-    await db.commit()
+    await db.flush()
     return await get_document(db, document.id)
 
 
@@ -339,7 +344,7 @@ async def log_activity(
             title=title,
         )
     )
-    await db.commit()
+    await db.flush()
 
 
 async def get_activity(db: AsyncSession, workspace_id: int) -> list[ActivityLog]:
@@ -350,3 +355,7 @@ async def get_activity(db: AsyncSession, workspace_id: int) -> list[ActivityLog]
         .order_by(ActivityLog.created_at.desc())
     )
     return list(result.scalars().all())
+
+
+async def bump_board(db: AsyncSession, board_id: int):
+    await db.execute(update(Board).where(Board.id == board_id).values(revision=Board.revision + 1))

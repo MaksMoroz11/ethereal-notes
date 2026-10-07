@@ -3,7 +3,7 @@ import { api, getSessionVersion, onSessionChange } from '../api/client'
 
 let workspaceRequest = 0
 let memberRequest = 0
-const initial = { workspaces: [], activeId: null, members: [], inviteError: '', error: '' }
+const initial = { workspaces: [], activeId: null, members: [], inviteError: '', error: '', activityRevision: 0 }
 
 export const useWorkspaceStore = create((set, get) => ({
 	...initial,
@@ -23,7 +23,7 @@ export const useWorkspaceStore = create((set, get) => ({
 		}
 	},
 	selectWorkspace: async id => {
-		set({ activeId: id, members: [], inviteError: '', error: '' })
+		set({ activeId: id, members: [], inviteError: '', error: '', activityRevision: 0 })
 		await get().loadMembers(id)
 	},
 	createWorkspace: async name => {

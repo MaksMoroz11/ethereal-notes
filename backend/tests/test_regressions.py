@@ -1,3 +1,4 @@
+from conftest import versioned_patch, versioned_post
 import asyncio
 import os
 import subprocess
@@ -23,10 +24,10 @@ def resources(client, users):
     owner = users()
     headers = auth_header(owner)
     workspace = client.get("/workspaces", headers=headers).json()[0]["id"]
-    board = client.post("/boards", headers=headers, json={"workspace_id": workspace, "title": "Board"}).json()
+    board = versioned_post(client, "/boards", headers=headers, json={"workspace_id": workspace, "title": "Board"}).json()
     column = add_column(client, board, headers)
-    task = client.post("/tasks", headers=headers, json={"board_id": board["id"], "column_id": column["id"], "title": "Task"}).json()
-    document = client.post("/documents", headers=headers, json={"workspace_id": workspace, "title": "Document"}).json()
+    task = versioned_post(client, "/tasks", headers=headers, json={"board_id": board["id"], "column_id": column["id"], "title": "Task"}).json()
+    document = versioned_post(client, "/documents", headers=headers, json={"workspace_id": workspace, "title": "Document"}).json()
     return owner, headers, workspace, board, column, task, document
 
 
@@ -49,32 +50,32 @@ def test_invalid_patch_does_not_change_entity(client, resources, entity, fields)
     value = {"boards": board, "tasks": task, "documents": document}[entity]
     path = f"/{entity}/{value['id']}"
     for field in fields:
-        assert client.patch(path, headers=headers, json={field: None}).status_code == 422
-    assert client.patch(path, headers=headers, json={"title": "   "}).status_code == 422
+        assert versioned_patch(client, path, headers=headers, json={field: None}).status_code == 422
+    assert versioned_patch(client, path, headers=headers, json={"title": "   "}).status_code == 422
     assert client.get(path, headers=headers).json()["title"] == value["title"]
 
 
 def test_nullable_references_and_empty_content_still_work(client, resources):
     _, headers, _, board, _, task, document = resources
-    assert client.patch(f"/boards/{board['id']}", headers=headers, json={"folder_id": None}).status_code == 200
-    assert client.patch(f"/tasks/{task['id']}", headers=headers, json={"assignee_id": None, "description": "", "tags": []}).status_code == 200
-    assert client.patch(f"/documents/{document['id']}", headers=headers, json={"folder_id": None, "content": ""}).status_code == 200
+    assert versioned_patch(client, f"/boards/{board['id']}", headers=headers, json={"folder_id": None}).status_code == 200
+    assert versioned_patch(client, f"/tasks/{task['id']}", headers=headers, json={"assignee_id": None, "description": "", "tags": []}).status_code == 200
+    assert versioned_patch(client, f"/documents/{document['id']}", headers=headers, json={"folder_id": None, "content": ""}).status_code == 200
 
 
 def test_column_patch_rejects_null_mandatory_fields(client, resources):
     _, headers, _, board, column, _, _ = resources
     path = f"/boards/{board['id']}/columns/{column['id']}"
     for body in ({"title": None}, {"title": "  "}, {"position": None}):
-        assert client.patch(path, headers=headers, json=body).status_code == 422
+        assert versioned_patch(client, path, headers=headers, json=body).status_code == 422
 
 
 def test_saving_latest_version_restores_current_content_without_duplicate(client, resources):
     _, headers, _, _, _, _, document = resources
     path = f"/documents/{document['id']}"
     snapshot = {"title": "Snapshot", "content": "Saved text"}
-    first = client.post(path + "/versions", headers=headers, json=snapshot).json()
-    assert client.patch(path, headers=headers, json={"title": "Different", "content": "Different text"}).status_code == 200
-    saved = client.post(path + "/versions", headers=headers, json=snapshot).json()
+    first = versioned_post(client, path + "/versions", headers=headers, json=snapshot).json()
+    assert versioned_patch(client, path, headers=headers, json={"title": "Different", "content": "Different text"}).status_code == 200
+    saved = versioned_post(client, path + "/versions", headers=headers, json=snapshot).json()
     assert saved["title"] == snapshot["title"] and saved["content"] == snapshot["content"]
     assert [version["id"] for version in saved["versions"]] == [version["id"] for version in first["versions"]]
 
@@ -82,16 +83,16 @@ def test_saving_latest_version_restores_current_content_without_duplicate(client
 def test_explicit_snapshot_records_current_content_changed_by_patch(client, resources):
     _, headers, _, _, _, _, document = resources
     path = f"/documents/{document['id']}"
-    assert client.post(path + "/versions", headers=headers, json={"title": "Document", "content": "First"}).status_code == 200
+    assert versioned_post(client, path + "/versions", headers=headers, json={"title": "Document", "content": "First"}).status_code == 200
     snapshot = {"title": "Document", "content": "Second"}
-    assert client.patch(path, headers=headers, json=snapshot).status_code == 200
-    saved = client.post(path + "/versions", headers=headers, json=snapshot).json()
+    assert versioned_patch(client, path, headers=headers, json=snapshot).status_code == 200
+    saved = versioned_post(client, path + "/versions", headers=headers, json=snapshot).json()
     assert len(saved["versions"]) == 2
     assert saved["versions"][0]["content"] == "Second"
 
 
 def test_registration_requires_four_characters(client):
-    response = client.post("/auth/register", json=credentials(client, "short_" + uuid4().hex, "abc"))
+    response = versioned_post(client, "/auth/register", json=credentials(client, "short_" + uuid4().hex, "abc"))
     assert response.status_code == 422
 
 
@@ -100,10 +101,10 @@ def test_recursive_folder_deletion_is_confirmed_scoped_and_removes_dependents(cl
     owner, member, outsider = users(), users(), users()
     headers = auth_header(owner)
     workspace = client.get("/workspaces", headers=headers).json()[0]["id"]
-    client.post(f"/workspaces/{workspace}/members", headers=headers, json={"login": member["login"]})
+    versioned_post(client, f"/workspaces/{workspace}/members", headers=headers, json={"login": member["login"]})
 
     def folder(title, parent=None, folder_kind=kind):
-        result = client.post("/folders", headers=headers, json={"workspace_id": workspace, "kind": folder_kind, "title": title, "parent_id": parent})
+        result = versioned_post(client, "/folders", headers=headers, json={"workspace_id": workspace, "kind": folder_kind, "title": title, "parent_id": parent})
         assert result.status_code == 201
         return result.json()
 
@@ -116,7 +117,7 @@ def test_recursive_folder_deletion_is_confirmed_scoped_and_removes_dependents(cl
     entity_path = "/boards" if kind == "board" else "/documents"
 
     def entity(folder_id):
-        result = client.post(entity_path, headers=headers, json={"workspace_id": workspace, "title": "Content", "folder_id": folder_id})
+        result = versioned_post(client, entity_path, headers=headers, json={"workspace_id": workspace, "title": "Content", "folder_id": folder_id})
         assert result.status_code == 201
         return result.json()
 
@@ -124,10 +125,10 @@ def test_recursive_folder_deletion_is_confirmed_scoped_and_removes_dependents(cl
     keep = entity(sibling["id"])
     if kind == "board":
         column = add_column(client, contents[0], headers)
-        task = client.post("/tasks", headers=headers, json={"board_id": contents[0]["id"], "column_id": column["id"], "title": "Hidden task", "assignee_id": member["id"]}).json()
+        task = versioned_post(client, "/tasks", headers=headers, json={"board_id": contents[0]["id"], "column_id": column["id"], "title": "Hidden task", "assignee_id": member["id"]}).json()
         assert client.get(f"/boards/{contents[0]['id']}", headers=headers).json()["tasks"] == []
     else:
-        assert client.post(f"/documents/{contents[0]['id']}/versions", headers=headers, json={"title": "Snapshot", "content": "Old documentation"}).status_code == 200
+        assert versioned_post(client, f"/documents/{contents[0]['id']}/versions", headers=headers, json={"title": "Snapshot", "content": "Old documentation"}).status_code == 200
 
     assert client.delete(path + "?recursive=true", headers=auth_header(outsider)).status_code == 404
     assert client.delete(path + "?recursive=true", headers=auth_header(member)).status_code == 403
@@ -161,11 +162,11 @@ def test_login_upgrades_legacy_hash_without_breaking_session(client, users):
             await engine.dispose()
 
     asyncio.run(password_hash(legacy))
-    response = client.post("/auth/login", json=credentials(client, user["login"], "old"))
+    response = versioned_post(client, "/auth/login", json=credentials(client, user["login"], "old"))
     assert response.status_code == 200
     assert asyncio.run(password_hash()).startswith("$bcrypt-sha256$")
     assert client.get("/auth/me", headers=auth_header(user)).status_code == 200
-    assert client.get("/auth/me", headers={"Authorization": "Bearer " + response.json()["token"]}).status_code == 200
+    assert client.get("/auth/me", headers={"Cookie": "ethereal_session=" + response.cookies.get("ethereal_session")}).status_code == 200
 
 
 def test_docs_and_openapi_honor_api_prefix(client):

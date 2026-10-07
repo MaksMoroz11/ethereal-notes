@@ -49,7 +49,9 @@ function HierarchyActions({ label, children }) {
 }
 
 export default function FolderTree({ folders, items, isDocs, isManager, activeId, onSelect, onCreateItem, onMoveItem, onDeleteItem }) {
-	const { createFolder, updateFolder, deleteFolder } = useFoldersStore()
+	const createFolder = useFoldersStore(state => state.createFolder)
+	const updateFolder = useFoldersStore(state => state.updateFolder)
+	const deleteFolder = useFoldersStore(state => state.deleteFolder)
 	const kind = isDocs ? 'document' : 'board'
 	const [open, setOpen] = useState({})
 	const [editing, setEditing] = useState(null)

@@ -1,3 +1,5 @@
+import { memo } from 'react'
+import { useBoardsStore } from '@/shared/store/boardsStore'
 import { Check, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
@@ -12,7 +14,8 @@ function stopCardClick(e) {
 	e.stopPropagation()
 }
 
-export default function KanbanCard({ task, columns, readOnly, onOpen, onDelete, onMove }) {
+function KanbanCard({ task, columns, canMove, canDelete, onOpen, onDelete, onMove }) {
+	const moving = useBoardsStore(state => state.moving[task.id])
 	const members = useWorkspaceStore(state => state.members)
 	const assignee = members.find(member => member.user_id === task.assignee_id)
 	const column = columns.find(item => item.id === task.column_id)
@@ -23,7 +26,7 @@ export default function KanbanCard({ task, columns, readOnly, onOpen, onDelete, 
 		>
 			<div className="flex items-center justify-between">
 				<span className="text-[0.7rem] font-semibold tracking-wider text-primary">#{task.uid}</span>
-				{!readOnly ? <Button
+				{canDelete ? <Button
 					type="button"
 					variant="ghost"
 					size="icon"
@@ -41,11 +44,12 @@ export default function KanbanCard({ task, columns, readOnly, onOpen, onDelete, 
 			{task.assignee_id ? (
 				<p className="truncate text-xs text-muted-foreground">Исполнитель: {assignee?.login ?? 'неизвестен'}</p>
 			) : null}
-			{readOnly ? <span className="text-xs text-muted-foreground">{column?.title}</span> : <DropdownMenu>
+			{!canMove ? <span className="text-xs text-muted-foreground">{column?.title}</span> : <DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button
 						type="button"
 						variant="outline"
+						disabled={moving}
 						size="sm"
 						className="mt-1 h-7 w-full justify-between px-2 text-[0.7rem] font-medium"
 						onPointerDown={stopCardClick}
@@ -71,3 +75,5 @@ export default function KanbanCard({ task, columns, readOnly, onOpen, onDelete, 
 		</div>
 	)
 }
+
+export default memo(KanbanCard, (a, b) => a.task === b.task && a.columns === b.columns && a.canMove === b.canMove && a.canDelete === b.canDelete)

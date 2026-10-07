@@ -13,7 +13,7 @@ router = APIRouter(prefix="/search", tags=["search"])
 
 @router.get("", response_model=list[SearchResult])
 async def search(workspace_id: int, q: str, assignee_id: int | None = None,
-                 all_tasks: bool = False, db: AsyncSession = Depends(get_db),
+                 all_tasks: bool = False, db: AsyncSession = Depends(get_db, scope="function"),
                  user: User = Depends(get_current_user)):
     selected = await access.task_view_user(db, workspace_id, user, assignee_id, all_tasks)
     query = q.strip()
