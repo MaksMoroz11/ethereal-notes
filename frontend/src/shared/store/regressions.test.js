@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, setToken } from '../api/client'
+import { api, setSession } from '../api/client'
 import { useAuthStore } from './authStore'
 import { useWorkspaceStore } from './workspaceStore'
 import { useDocumentsStore } from './documentsStore'
@@ -11,11 +11,11 @@ import { deferred, response, document } from '@/test/fixtures'
 vi.mock('../lib/encryptPassword', () => ({ encryptPassword: async () => ({ encrypted_password: 'encrypted' }) }))
 
 function prepare() {
-	setToken(null)
+	setSession(null)
 	sessionStorage.clear()
 	localStorage.clear()
-	setToken('session-1')
-	useAuthStore.setState({ token: 'session-1', user: { id: 1, login: 'owner' }, validated: true, error: '' })
+	setSession('session-1')
+	useAuthStore.setState({ authenticated: true, user: { id: 1, login: 'owner' }, validated: true, error: '' })
 	useWorkspaceStore.setState({ activeId: 1, workspaces: [{ id: 1, role: 'owner' }] })
 	useDocumentsStore.setState({ documents: [document], activeId: document.id })
 	vi.stubGlobal('fetch', vi.fn())
@@ -102,7 +102,7 @@ describe('workspace and session isolation', () => {
 		useFoldersStore.setState({ boardFolders: [{ id: 'folder' }] })
 		fetch.mockResolvedValueOnce(response({ detail: 'expired' }, 401))
 		await expect(api('/auth/me')).rejects.toThrow('Сессия истекла')
-		expect(useAuthStore.getState().token).toBeNull()
+		expect(useAuthStore.getState().authenticated).toBe(false)
 		expect(useWorkspaceStore.getState().workspaces).toEqual([])
 		expect(useDocumentsStore.getState().documents).toEqual([])
 		expect(useBoardsStore.getState().boards).toEqual([])
@@ -113,16 +113,16 @@ describe('workspace and session isolation', () => {
 		const old = deferred()
 		fetch.mockReturnValueOnce(old.promise)
 		const request = api('/auth/me').catch(error => error)
-		fetch.mockResolvedValueOnce(response({ token: 'session-2', user: { id: 2, login: 'next' } }))
+		fetch.mockResolvedValueOnce(response({ csrf_token: 'csrf-2', user: { id: 2, login: 'next' } }))
 		await useAuthStore.getState().login('next', 'password')
 		old.resolve(response({ detail: 'expired' }, 401))
 		expect((await request).name).toBe('StaleRequestError')
-		expect(useAuthStore.getState().token).toBe('session-2')
+		expect(useAuthStore.getState().authenticated).toBe(true)
 		expect(useDocumentsStore.getState().documents).toEqual([])
 	})
 	it('validates the restored session through auth/me', async () => {
 		useAuthStore.setState({ validated: false })
-		fetch.mockResolvedValueOnce(response({ id: 1, login: 'confirmed' }))
+		fetch.mockResolvedValueOnce(response({ id: 1, login: 'confirmed' })).mockResolvedValueOnce(response({ csrf_token: 'csrf' }))
 		await useAuthStore.getState().validateSession()
 		expect(useAuthStore.getState().validated).toBe(true)
 		expect(useAuthStore.getState().user.login).toBe('confirmed')

@@ -22,6 +22,10 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost,http://127.0.0.1}
+      CONSENT_VERSION: ${CONSENT_VERSION:-2026-10-07}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      PRIVACY_OPERATOR: ${PRIVACY_OPERATOR:-}
+      PRIVACY_CONTACT: ${PRIVACY_CONTACT:-}
       AUTH_PRIVATE_KEY_FILE: /var/lib/ethereal/auth/private.pem
     volumes:
       - authkeys:/var/lib/ethereal/auth

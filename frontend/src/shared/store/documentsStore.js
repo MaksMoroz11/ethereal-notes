@@ -3,6 +3,7 @@ import { api, getSessionVersion, onSessionChange, StaleRequestError } from '../a
 import { useWorkspaceStore, workspaceRequestIsCurrent } from './workspaceStore'
 import { useAuthStore } from './authStore'
 import { readDraft, writeDraft, removeDraft, clearDrafts, snapshotOf, sameSnapshot } from '../lib/documentDrafts'
+import { reconcile } from '../lib/reconcile'
 
 const records = new Map()
 const recordChanges = new Map()
@@ -10,7 +11,7 @@ const deletedRecords = new Set()
 let mutationRevision = 0
 const queues = new Map()
 let loadRequest = 0
-const initial = { documents: [], activeId: null, loading: false, error: '', drafts: {}, statuses: {}, saveErrors: {}, restoring: {} }
+const initial = { documents: [], activeId: null, loading: false, error: '', drafts: {}, statuses: {}, saveErrors: {}, restoring: {}, conflicts: {} }
 
 function enqueue(id, session, operation) {
 	const key = `${session}:${id}`
@@ -51,7 +52,7 @@ export const useDocumentsStore = create((set, get) => {
 			const request = ++loadRequest
 			const session = getSessionVersion()
 			const revision = mutationRevision
-			set({ loading: true, error: '' })
+			set({ loading: !get().documents.length, error: '' })
 			try {
 				if (!id) { set({ documents: [], activeId: null }); return }
 				const fetched = await api(`/documents?workspace_id=${id}`)
@@ -61,7 +62,7 @@ export const useDocumentsStore = create((set, get) => {
 				const ids = new Set(documents.map(doc => doc.id))
 				documents.push(...get().documents.filter(doc => !ids.has(doc.id) && (recordChanges.get(doc.id) ?? 0) > revision && !deletedRecords.has(doc.id)))
 				for (const doc of documents) records.set(doc.id, doc)
-				set(state => ({ documents, activeId: documents.some(doc => doc.id === state.activeId) ? state.activeId : documents[0]?.id ?? null }))
+				set(state => ({ documents: reconcile(state.documents, documents), activeId: documents.some(doc => doc.id === state.activeId) ? state.activeId : documents[0]?.id ?? null }))
 			} catch (error) {
 				if (request !== loadRequest || !workspaceRequestIsCurrent(id, session)) return
 				set({ error: error.message })
@@ -70,6 +71,38 @@ export const useDocumentsStore = create((set, get) => {
 				if (request === loadRequest && session === getSessionVersion()) set({ loading: false })
 			}
 		},
+        loadDocument: async id => {
+            const workspaceId = useWorkspaceStore.getState().activeId
+            const session = getSessionVersion()
+            const before = documentFor(id)
+            const document = await api(`/documents/${id}`, { silent: true })
+            if (!workspaceRequestIsCurrent(workspaceId, session) || documentFor(id) !== before) return
+            records.set(id, document)
+            set(state => ({ documents: state.documents.some(item => item.id === id)
+                ? reconcile(state.documents, state.documents.map(item => item.id === id ? document : item))
+                : [...state.documents, document] }))
+            const draft = get().drafts[id] || readDraft(userId(), id)
+            if (draft && (draft.expected_revision ?? before?.revision) !== document.revision && !sameSnapshot(snapshotOf(draft), document)) {
+                set(state => ({ conflicts: { ...state.conflicts, [id]: true } }))
+            }
+            return document
+        },
+        resolveConflict: async (id, keepMine) => {
+            const owner = userId()
+            const draft = draftFor(id)
+            const session = getSessionVersion()
+            const latest = await api(`/documents/${id}`, { silent: true })
+            if (session !== getSessionVersion()) return
+            accept(latest)
+            if (keepMine) {
+                const next = { ...draft, expected_revision: latest.revision }
+                writeDraft(owner, id, next)
+                set(state => ({ drafts: { ...state.drafts, [id]: next } }))
+            } else discardDraft(id, owner)
+            set(state => ({ conflicts: { ...state.conflicts, [id]: false } }))
+            status(id, keepMine ? 'pending' : 'saved')
+            if (keepMine) return get().saveDraft(id)
+        },
 		createDocument: async (title, folderId = null) => {
 			const workspaceId = useWorkspaceStore.getState().activeId
 			const session = getSessionVersion()
@@ -80,6 +113,18 @@ export const useDocumentsStore = create((set, get) => {
 			if (workspaceRequestIsCurrent(workspaceId, session)) set(state => ({ documents: [document, ...state.documents.filter(doc => doc.id !== document.id)], activeId: document.id }))
 		},
 		selectDocument: id => set({ activeId: id }),
+        removeDocuments: ids => {
+            for (const id of ids) {
+                deletedRecords.add(id)
+                recordChanges.set(id, ++mutationRevision)
+                records.delete(id)
+                discardDraft(id, userId())
+            }
+            set(state => {
+                const documents = state.documents.filter(doc => !ids.has(doc.id))
+                return { documents, activeId: ids.has(state.activeId) ? documents[0]?.id ?? null : state.activeId }
+            })
+        },
 		removeDocumentsInFolders: folderIds => {
 			const ids = new Set([...records.values(), ...get().documents].filter(doc => folderIds.has(doc.folder_id)).map(doc => doc.id))
 			for (const id of ids) {
@@ -97,7 +142,7 @@ export const useDocumentsStore = create((set, get) => {
 			if (get().restoring[id]) return
 			const current = draftFor(id)
 			if (!current) return
-			const draft = { title: current.title, content: current.content, ...changes }
+			const draft = { title: current.title, content: current.content, expected_revision: current.expected_revision ?? current.revision ?? documentFor(id)?.revision, ...changes }
 			if (sameSnapshot(snapshotOf(draft), documentFor(id)) && !queues.has(`${getSessionVersion()}:${id}`)) {
 				discardDraft(id, userId())
 				status(id, 'saved')
@@ -111,7 +156,7 @@ export const useDocumentsStore = create((set, get) => {
 			const session = getSessionVersion()
 			const owner = userId()
 			return enqueue(id, session, async () => {
-				if (!enabled()) return documentFor(id)
+				if (!enabled() || get().conflicts[id]) return documentFor(id)
 				while (!get().restoring[id]) {
 					const document = documentFor(id)
 					const draft = draftFor(id)
@@ -124,7 +169,7 @@ export const useDocumentsStore = create((set, get) => {
 					}
 					status(id, 'saving')
 					try {
-						const saved = await api(`/documents/${id}/versions`, { method: 'POST', body: snapshot })
+						const saved = await api(`/documents/${id}/versions`, { method: 'POST', body: { ...snapshot, expected_revision: draft.expected_revision ?? document.revision } })
 						if (deletedRecords.has(id)) return saved
 						accept(saved)
 						const latestDraft = draftFor(id)
@@ -133,16 +178,22 @@ export const useDocumentsStore = create((set, get) => {
 							status(id, 'saved')
 							return saved
 						}
+						const nextDraft = { ...latestDraft, expected_revision: saved.revision }
+						writeDraft(owner, id, nextDraft)
+						set(state => ({ drafts: { ...state.drafts, [id]: nextDraft } }))
 						status(id, 'pending')
 						if (!(typeof drain === 'function' ? drain() : drain)) return saved
 					} catch (error) {
-						if (session === getSessionVersion()) status(id, 'pending', error.message)
+						if (session === getSessionVersion()) {
+							status(id, 'pending', error.message)
+							if (error.status === 409) set(state => ({ conflicts: { ...state.conflicts, [id]: true } }))
+						}
 						throw error
 					}
 				}
 			})
 		},
-		updateDocument: (id, changes) => enqueue(id, getSessionVersion(), async () => accept(await api(`/documents/${id}`, { method: 'PATCH', body: changes }))),
+		updateDocument: (id, changes) => enqueue(id, getSessionVersion(), async () => accept(await api(`/documents/${id}`, { method: 'PATCH', body: { ...changes, expected_revision: documentFor(id)?.revision } }))),
 		moveDocument: (id, folderId) => get().updateDocument(id, { folder_id: folderId }),
 		deleteDocument: id => {
 			const owner = userId()
@@ -167,12 +218,15 @@ export const useDocumentsStore = create((set, get) => {
 			return enqueue(id, session, async () => {
 				try {
 					status(id, 'saving')
-					const saved = accept(await api(`/documents/${id}/restore/${versionId}`, { method: 'POST' }))
+					const saved = accept(await api(`/documents/${id}/restore/${versionId}`, { method: 'POST', body: { expected_revision: documentFor(id)?.revision } }))
 					discardDraft(id, owner)
 					status(id, 'saved')
 					return saved
 				} catch (error) {
-					if (session === getSessionVersion()) status(id, 'pending', error.message)
+					if (session === getSessionVersion()) {
+							status(id, 'pending', error.message)
+							if (error.status === 409) set(state => ({ conflicts: { ...state.conflicts, [id]: true } }))
+						}
 					throw error
 				} finally {
 					if (session === getSessionVersion()) set(state => ({ restoring: { ...state.restoring, [id]: false } }))

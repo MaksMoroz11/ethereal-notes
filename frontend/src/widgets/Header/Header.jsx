@@ -4,10 +4,14 @@ import { Menu, Moon, Sun } from 'lucide-react'
 import { useAuthStore } from '@/shared/store/authStore'
 import { Button } from '@/components/ui/button'
 import UserMenu from './UserMenu'
+import NotificationBell from './NotificationBell'
 import { cn } from '@/lib/utils'
 
 export default function Header({ fluid = false, onMenuClick }) {
 	const user = useAuthStore(state => state.user)
+	const validated = useAuthStore(state => state.validated)
+	const validateSession = useAuthStore(state => state.validateSession)
+	useEffect(() => { if (!validated) validateSession() }, [validated, validateSession])
 	const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
 
 	useEffect(() => {
@@ -45,7 +49,7 @@ export default function Header({ fluid = false, onMenuClick }) {
 						{theme === 'dark' ? <Sun /> : <Moon />}
 					</Button>
 					{user ? (
-						<UserMenu login={user.login} />
+						<><NotificationBell /><UserMenu login={user.login} /></>
 					) : (
 						<Button asChild variant="ghost">
 							<Link to="/login">Войти</Link>

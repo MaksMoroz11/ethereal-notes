@@ -31,6 +31,8 @@ def credentials(client, login, password):
                               algorithm=hashes.SHA256(), label=None),
     )
     return {
+        "consent": True,
+        "consent_version": settings.consent_version,
         "login": login,
         "key_id": info["key_id"],
         "encrypted_key": base64.b64encode(encrypted_key).decode(),
@@ -48,14 +50,18 @@ def client():
 @pytest.fixture
 def users(client):
     created = []
+    client.cookies.clear()
 
     def create():
         login = f"test_{uuid.uuid4().hex[:12]}"
+        client.cookies.clear()
         response = client.post("/auth/register", json=credentials(client, login, "Integration123!"))
         assert response.status_code == 201, response.text
         payload = response.json()
         created.append(payload["user"]["id"])
-        return {"login": login, "id": payload["user"]["id"], "token": payload["token"]}
+        cookie = response.cookies.get("ethereal_session")
+        client.cookies.clear()
+        return {"login": login, "id": payload["user"]["id"], "cookie": cookie, "csrf": payload["csrf_token"]}
 
     yield create
     asyncio.run(cleanup(created))
@@ -124,3 +130,21 @@ async def cleanup(user_ids):
             await connection.execute(text("delete from users where id = any(:ids)"), {"ids": user_ids})
     finally:
         await cleanup_engine.dispose()
+
+
+def auth_header(user):
+    return {"Cookie": f"ethereal_session={user['cookie']}", "X-CSRF-Token": user["csrf"]}
+
+
+def versioned_patch(client, url, **kwargs):
+    if url.startswith(("/tasks/", "/documents/")) and "json" in kwargs:
+        current = client.get(url, headers=kwargs.get("headers", {}))
+        kwargs["json"] = {"expected_revision": current.json().get("revision", 1), **kwargs["json"]}
+    return client.patch(url, **kwargs)
+
+
+def versioned_post(client, url, **kwargs):
+    if url.startswith("/documents/") and (url.endswith("/versions") or "/restore/" in url):
+        current = client.get("/".join(url.split("/")[:3]), headers=kwargs.get("headers", {}))
+        kwargs["json"] = {"expected_revision": current.json().get("revision", 1), **kwargs.get("json", {})}
+    return client.post(url, **kwargs)

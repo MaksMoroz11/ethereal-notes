@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /login
+Disallow: /dashboard
+Disallow: /documents
+Disallow: /activity
+Disallow: /api
+Disallow: /docs
+Disallow: /redoc
+Disallow: /openapi.json

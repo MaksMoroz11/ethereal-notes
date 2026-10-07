@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
-import { setToken } from '@/shared/api/client'
+import { setSession } from '@/shared/api/client'
 import { useAuthStore } from '@/shared/store/authStore'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 import { useDocumentsStore } from '@/shared/store/documentsStore'
@@ -17,17 +17,17 @@ vi.mock('@/pages/documents/ui/DocumentEditor', () => ({
 }))
 
 beforeEach(() => {
-	setToken(null)
+	setSession(null)
 	sessionStorage.clear()
 	localStorage.setItem('ethereal-notes:auto-save', 'false')
-	setToken('session')
-	useAuthStore.setState({ token: 'session', user: { id: 1, login: 'owner' }, validated: true })
+	setSession('session')
+	useAuthStore.setState({ authenticated: true, user: { id: 1, login: 'owner' }, validated: true })
 	useWorkspaceStore.setState({ activeId: 1, workspaces: [{ id: 1, role: 'owner' }], members: [{ user_id: 1, login: 'owner' }, { user_id: 2, login: 'member' }] })
 	useDocumentsStore.setState({ documents: [document], activeId: document.id })
 	vi.stubGlobal('fetch', vi.fn())
 	vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
 })
-afterEach(() => setToken(null))
+afterEach(() => setSession(null))
 
 it('recovers a local draft after remount without sending it when autosave is disabled', async () => {
 	sessionStorage.setItem(draftKey(1, document.id), JSON.stringify({ title: 'Document', content: 'Recovered' }))
@@ -83,7 +83,7 @@ for (const view of ['self', 'all', '2']) {
 		useBoardsStore.setState({ boards: [board], activeId: board.id, workspaceId: 1, view })
 		fetch.mockResolvedValueOnce(response({ ...board, tasks }))
 			.mockResolvedValueOnce(new Response(null, { status: 204 }))
-			.mockResolvedValueOnce(response([{ ...board, columns: [], tasks: [] }]))
+			.mockResolvedValueOnce(response({ ...board, columns: [], tasks: [] }))
 		render(<MemoryRouter><Dashboard /></MemoryRouter>)
 		await userEvent.click(screen.getByRole('button', { name: 'Удалить колонку' }))
 		await userEvent.click(await screen.findByRole('button', { name: 'Удалить колонку и задачи' }))
@@ -110,7 +110,7 @@ it('requires a destination and transfers tasks hidden by the active filter', asy
 	useBoardsStore.setState({ boards: [board], activeId: board.id, workspaceId: 1, view: 'self' })
 	fetch.mockResolvedValueOnce(response({ ...board, tasks: [task] }))
 		.mockResolvedValueOnce(new Response(null, { status: 204 }))
-		.mockResolvedValueOnce(response([{ ...board, columns: [board.columns[1]] }]))
+		.mockResolvedValueOnce(response({ ...board, columns: [board.columns[1]] }))
 	render(<MemoryRouter><Dashboard /></MemoryRouter>)
 	await userEvent.click(screen.getAllByRole('button', { name: 'Удалить колонку' })[0])
 	const dialog = await screen.findByRole('dialog')

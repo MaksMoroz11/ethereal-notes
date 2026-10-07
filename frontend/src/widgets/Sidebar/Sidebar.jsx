@@ -6,6 +6,7 @@ import { useDocumentsStore } from '@/shared/store/documentsStore'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 import { useFoldersStore } from '@/shared/store/foldersStore'
 import FolderTree from './FolderTree'
+import { roles } from '@/shared/messages/workspaces'
 import SearchBox from './SearchBox'
 import ConfirmDialog from '@/shared/ui/ConfirmDialog/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -447,8 +448,8 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 											</button>
 										</DropdownMenuTrigger>
 										<DropdownMenuContent align="end">
-											<DropdownMenuItem onClick={() => updateMemberRole(member.user_id, 'admin')}>Администратор</DropdownMenuItem>
-											<DropdownMenuItem onClick={() => updateMemberRole(member.user_id, 'member')}>Участник</DropdownMenuItem>
+											<DropdownMenuItem onClick={() => updateMemberRole(member.user_id, 'admin')}>{roles.admin}</DropdownMenuItem>
+											<DropdownMenuItem onClick={() => updateMemberRole(member.user_id, 'member')}>{roles.member}</DropdownMenuItem>
 										</DropdownMenuContent>
 									</DropdownMenu>
 								) : (

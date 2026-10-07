@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useBoardsStore } from '@/shared/store/boardsStore'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 import { useAuthStore } from '@/shared/store/authStore'
@@ -16,13 +16,20 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@/components/ui/dialog'
-import KanbanCard from './ui/KanbanCard'
+import KanbanColumn from './ui/KanbanColumn'
 import KanbanLayout from './ui/KanbanLayout'
 import Task from './ui/Task'
 
 export default function Dashboard() {
 	const board = useBoardsStore(state => state.boards.find(item => item.id === state.activeId) || null)
-	const { createTask, deleteTask, updateTask, createColumn, updateColumn, deleteColumn, setView } = useBoardsStore()
+	const createTask = useBoardsStore(state => state.createTask)
+	const deleteTask = useBoardsStore(state => state.deleteTask)
+	const updateTask = useBoardsStore(state => state.updateTask)
+	const createColumn = useBoardsStore(state => state.createColumn)
+	const updateColumn = useBoardsStore(state => state.updateColumn)
+	const deleteColumn = useBoardsStore(state => state.deleteColumn)
+	const setView = useBoardsStore(state => state.setView)
+	const moveTask = useBoardsStore(state => state.moveTask)
 	const view = useBoardsStore(state => state.view)
 	const loading = useBoardsStore(state => state.loading)
 	const error = useBoardsStore(state => state.error)
@@ -63,10 +70,10 @@ export default function Dashboard() {
 		}
 	}
 
-	function run(action) {
+	const run = useCallback(action => {
 		setActionError('')
 		Promise.resolve(action).catch(err => setActionError(err.message))
-	}
+	}, [])
 
 	function submitColumn(event) {
 		event.preventDefault()
@@ -153,7 +160,7 @@ export default function Dashboard() {
 	const deletingTaskCount = pendingColumn?.taskCount ?? 0
 	const remainingColumns = board?.columns.filter(column => column.id !== pendingColumn?.id) ?? []
 
-	if (loading) return <div className="px-8 py-12 text-center text-sm text-muted-foreground">Загрузка досок…</div>
+	if (loading && !board) return <div className="px-8 py-12 text-center text-sm text-muted-foreground">Загрузка досок…</div>
 	if (error) return <div className="px-8 py-12 text-center text-sm text-destructive">Не удалось загрузить доски: {error}</div>
 	if (!board) return <div className="px-8 py-12 text-center text-sm text-muted-foreground">Создайте или выберите доску слева</div>
 
@@ -182,47 +189,19 @@ export default function Dashboard() {
 			</form> : null}
 			{actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
 			<KanbanLayout>
-				{board.columns.map((column, index) => {
-					const tasks = board.tasks.filter(task => task.column_id === column.id)
-					const draft = drafts[column.id]
-					return <div key={column.id} className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-muted p-3.5">
-						<div className="flex min-w-0 items-center gap-1 text-sm font-semibold text-secondary-foreground">
-							{editingColumn?.id === column.id ? <form className="flex min-w-0 flex-1 gap-1" onSubmit={event => { event.preventDefault(); run(updateColumn(column.id, { title: editingColumn.title })); setEditingColumn(null) }}>
-								<Input autoFocus className="h-7 text-xs" value={editingColumn.title} onChange={event => setEditingColumn({ ...editingColumn, title: event.target.value })} />
-								<Button size="sm" type="submit">OK</Button>
-							</form> : <span className="min-w-0 flex-1 truncate">{column.title}</span>}
-							<span className="rounded-full bg-secondary px-2 py-0.5 text-[0.7rem]">{tasks.length}</span>
-						</div>
-						{isManager ? <div className="flex flex-wrap items-center gap-1">
-							<Button size="icon" variant="ghost" className="h-6 w-6" aria-label="Переименовать колонку" onClick={() => setEditingColumn({ id: column.id, title: column.title })}><Pencil className="h-3 w-3" /></Button>
-							<Button size="icon" variant="ghost" className="h-6 w-6" aria-label="Передвинуть влево" disabled={!index} onClick={() => run(updateColumn(column.id, { position: index - 1 }))}><ChevronLeft className="h-3 w-3" /></Button>
-							<Button size="icon" variant="ghost" className="h-6 w-6" aria-label="Передвинуть вправо" disabled={index === board.columns.length - 1} onClick={() => run(updateColumn(column.id, { position: index + 1 }))}><ChevronRight className="h-3 w-3" /></Button>
-							<Button size="icon" variant="ghost" className="h-6 w-6" aria-label="Удалить колонку" disabled={checkingColumn} onClick={() => beginColumnDelete(column)}><Trash2 className="h-3 w-3" /></Button>
-						</div> : null}
-						<div className="flex min-w-0 flex-col gap-2.5">
-							{tasks.map(task => <KanbanCard key={task.id} task={task} columns={board.columns} readOnly={!isManager} onOpen={() => setOpenId(task.id)} onDelete={() => setPendingDelete(task)} onMove={next => run(updateTask(task.id, { column_id: next }))} />)}
-							{draft ? <form
-								className="rounded-lg border border-primary/40 bg-card p-3 shadow-sm"
-								onSubmit={event => saveDraft(event, column.id)}
-								onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget) && !draft.title.trim()) cancelDraft(column.id) }}
-								onKeyDown={event => { if (event.key === 'Escape') cancelDraft(column.id) }}
-							>
-								<Input autoFocus aria-label="Название новой задачи" placeholder="Название задачи" value={draft.title} onChange={event => setDraft(column.id, { title: event.target.value })} className="mb-2 h-auto border-0 px-0 text-sm font-semibold shadow-none focus-visible:ring-0" />
-								<p className="mb-3 text-[0.7rem] text-muted-foreground">Новая задача · {column.title}</p>
-								{draft.error ? <p className="mb-2 text-xs text-destructive">{draft.error}</p> : null}
-								<div className="flex justify-end gap-1">
-									<Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label="Отменить создание" onClick={() => cancelDraft(column.id)}><X className="h-4 w-4" /></Button>
-									<Button type="submit" size="icon" className="h-7 w-7" aria-label="Сохранить задачу" disabled={!draft.title.trim() || savingDraft !== null}><Check className="h-4 w-4" /></Button>
-								</div>
-							</form> : null}
-						</div>
-						{isManager && !draft ? <Button type="button" variant="ghost" className="w-full justify-start text-xs text-muted-foreground" onClick={() => setDraft(column.id, { title: '', error: '' })}><Plus className="h-3.5 w-3.5" />Добавить задачу</Button> : null}
-					</div>
-				})}
+                {board.columns.map((column, index) => <KanbanColumn key={column.id}
+                    column={column} index={index} columns={board.columns}
+                    tasks={board.tasks.filter(task => task.column_id === column.id)} draft={drafts[column.id]}
+                    editingColumn={editingColumn?.id === column.id ? editingColumn : null}
+                    isManager={isManager} user={user} run={run} updateColumn={updateColumn}
+                    setEditingColumn={setEditingColumn} checkingColumn={checkingColumn}
+                    beginColumnDelete={beginColumnDelete} setOpenId={setOpenId} setPendingDelete={setPendingDelete}
+                    moveTask={moveTask} saveDraft={saveDraft} cancelDraft={cancelDraft} setDraft={setDraft} savingDraft={savingDraft}
+                />)}
 			</KanbanLayout>
 			<Dialog open={Boolean(openTask)} onOpenChange={open => !open && closeTask()}>
 				<DialogContent showClose={false} className="max-w-2xl border-0 bg-transparent p-0 shadow-none sm:max-w-2xl">
-					{openTask ? <Task key={openTask.id} task={openTask} columnTitle={openColumn?.title} readOnly={!isManager} onClose={closeTask} onChange={changes => updateTask(openTask.id, changes)} /> : null}
+					{openTask ? <Task key={openTask.id} task={openTask} columnTitle={openColumn?.title} columns={board.columns} canMove={isManager || openTask.assignee_id === user?.id} onMove={next => moveTask(openTask.id, next)} canEdit={isManager} onClose={closeTask} onChange={changes => updateTask(openTask.id, changes)} /> : null}
 				</DialogContent>
 			</Dialog>
 			<Dialog open={Boolean(pendingDelete)} onOpenChange={next => { if (!next && !deletingTask) setPendingDelete(null) }}>

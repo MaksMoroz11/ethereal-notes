@@ -10,15 +10,22 @@ import Documents from '../pages/documents/index'
 import Activity from '../pages/activity/index'
 import NotFound from '../pages/not-found/index'
 import Documentation from '../pages/documentation/index'
+import Privacy from '../pages/privacy/index'
+import CookieBanner from '@/shared/ui/CookieBanner'
+import Toasts from '@/shared/ui/Toasts'
 
 export default function App() {
 	return (
 		<BrowserRouter>
+			<CookieBanner />
+			<Toasts />
 			<Routes>
 				<Route element={<Layout />}>
 					<Route path="/" element={<Home />} />
 					<Route path="/login" element={<Login />} />
 					<Route path="/documentation" element={<Documentation />} />
+					<Route path="/privacy" element={<Privacy />} />
+					<Route path="/consent" element={<Privacy consent />} />
 				</Route>
 				<Route
 					element={

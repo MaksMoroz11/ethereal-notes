@@ -23,6 +23,7 @@ class Session(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     token: Mapped[str] = mapped_column(unique=True, index=True)
+    csrf_token: Mapped[str] = mapped_column(default="")
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     expires_at: Mapped[datetime] = mapped_column()
@@ -64,6 +65,7 @@ class Board(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column()
+    revision: Mapped[int] = mapped_column(default=1)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"))
     folder_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("folders.id"), nullable=True)
@@ -81,6 +83,8 @@ class Folder(Base):
     kind: Mapped[str] = mapped_column(default="board")
     parent_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("folders.id"), nullable=True)
     title: Mapped[str] = mapped_column()
+    revision: Mapped[int] = mapped_column(default=1)
+    __mapper_args__ = {"version_id_col": revision}
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
 
@@ -102,6 +106,8 @@ class Task(Base):
     column_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("board_columns.id"))
     uid: Mapped[str] = mapped_column()
     title: Mapped[str] = mapped_column()
+    revision: Mapped[int] = mapped_column(default=1)
+    __mapper_args__ = {"version_id_col": revision}
     description: Mapped[str] = mapped_column(default="")
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -119,6 +125,8 @@ class Document(Base):
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     title: Mapped[str] = mapped_column()
+    revision: Mapped[int] = mapped_column(default=1)
+    __mapper_args__ = {"version_id_col": revision}
     content: Mapped[str] = mapped_column(Text, default="")
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"))
@@ -181,3 +189,23 @@ class ActivityLog(Base):
     @property
     def user_login(self) -> str:
         return self.user.login if self.user is not None else ""
+
+
+class Consent(Base):
+    __tablename__ = "consents"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    version: Mapped[str] = mapped_column()
+    accepted_at: Mapped[datetime] = mapped_column(default=func.now())
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    recipient_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True)
+    kind: Mapped[str] = mapped_column()
+    entity_id: Mapped[str | None] = mapped_column(nullable=True)
+    title: Mapped[str] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(default=func.now())
+    read_at: Mapped[datetime | None] = mapped_column(nullable=True)

@@ -6,15 +6,11 @@ from sqlalchemy.pool import NullPool
 from uuid import UUID
 
 from app.config import settings
-from conftest import credentials
-
-
-def auth_header(user):
-    return {"Authorization": f"Bearer {user['token']}"}
+from conftest import credentials, auth_header, versioned_patch, versioned_post
 
 
 def add_column(client, board, headers, title="Открыта"):
-    response = client.post(f"/boards/{board['id']}/columns", json={"title": title}, headers=headers)
+    response = versioned_post(client, f"/boards/{board['id']}/columns", json={"title": title}, headers=headers)
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -31,7 +27,7 @@ def test_register_session_and_default_workspace(client, users):
     assert len(spaces.json()) == 1
     assert spaces.json()[0]["role"] == "owner"
 
-    logout = client.post("/auth/logout", headers=auth_header(user))
+    logout = versioned_post(client, "/auth/logout", headers=auth_header(user))
     assert logout.status_code == 204
     assert client.get("/auth/me", headers=auth_header(user)).status_code == 401
 
@@ -44,12 +40,12 @@ def test_workspace_roles_and_lifecycle(client, users):
     initial = client.get("/workspaces", headers=headers).json()[0]
 
     assert client.delete(f"/workspaces/{initial['id']}", headers=headers).status_code == 400
-    workspace = client.post("/workspaces", json={"name": "Команда"}, headers=headers)
+    workspace = versioned_post(client, "/workspaces", json={"name": "Команда"}, headers=headers)
     assert workspace.status_code == 201
     workspace_id = workspace.json()["id"]
     assert workspace.json()["role"] == "owner"
 
-    renamed = client.patch(
+    renamed = versioned_patch(client,
         f"/workspaces/{workspace_id}",
         json={"name": "Команда 2"},
         headers=headers,
@@ -58,38 +54,38 @@ def test_workspace_roles_and_lifecycle(client, users):
     assert renamed.json()["name"] == "Команда 2"
 
     for user in (admin, member):
-        response = client.post(
+        response = versioned_post(client,
             f"/workspaces/{workspace_id}/members",
             json={"login": user["login"]},
             headers=headers,
         )
         assert response.status_code == 201
 
-    role = client.patch(
+    role = versioned_patch(client,
         f"/workspaces/{workspace_id}/members/{admin['id']}",
         json={"role": "admin"},
         headers=headers,
     )
     assert role.status_code == 200
     assert role.json()["role"] == "admin"
-    assert client.patch(
+    assert versioned_patch(client,
         f"/workspaces/{workspace_id}/members/{owner['id']}",
         json={"role": "member"},
         headers=headers,
     ).status_code == 400
-    assert client.patch(
+    assert versioned_patch(client,
         f"/workspaces/{workspace_id}",
         json={"name": "Нет"},
         headers=auth_header(admin),
     ).status_code == 403
-    assert client.patch(
+    assert versioned_patch(client,
         f"/workspaces/{workspace_id}/members/{member['id']}",
         json={"role": "admin"},
         headers=auth_header(admin),
     ).status_code == 403
 
-    board = client.post("/boards", json={"title": "Доска", "workspace_id": workspace_id}, headers=headers).json()
-    document = client.post(
+    board = versioned_post(client, "/boards", json={"title": "Доска", "workspace_id": workspace_id}, headers=headers).json()
+    document = versioned_post(client,
         "/documents",
         json={"title": "Документ", "workspace_id": workspace_id},
         headers=headers,
@@ -107,13 +103,13 @@ def test_workspace_data_isolation_and_document_versions(client, users):
     outsider = users()
     member = users()
     headers = auth_header(owner)
-    workspace_id = client.post("/workspaces", json={"name": "Private"}, headers=headers).json()["id"]
-    board = client.post("/boards", json={"title": "Доска", "workspace_id": workspace_id}, headers=headers).json()
+    workspace_id = versioned_post(client, "/workspaces", json={"name": "Private"}, headers=headers).json()["id"]
+    board = versioned_post(client, "/boards", json={"title": "Доска", "workspace_id": workspace_id}, headers=headers).json()
     column = add_column(client, board, headers)
-    task = client.post("/tasks", json={"board_id": board["id"], "column_id": column["id"], "title": "Задача"}, headers=headers).json()
+    task = versioned_post(client, "/tasks", json={"board_id": board["id"], "column_id": column["id"], "title": "Задача"}, headers=headers).json()
     UUID(task["id"])
-    document = client.post("/documents", json={"title": "Документ", "workspace_id": workspace_id}, headers=headers).json()
-    version = client.post(
+    document = versioned_post(client, "/documents", json={"title": "Документ", "workspace_id": workspace_id}, headers=headers).json()
+    version = versioned_post(client,
         f"/documents/{document['id']}/versions",
         json={"title": "Версия 1", "content": "private"},
         headers=headers,
@@ -133,27 +129,29 @@ def test_workspace_data_isolation_and_document_versions(client, users):
         ("post", f"/documents/{document['id']}/restore/{version_id}", None),
     ]
     for method, path, body in protected:
+        if method in {"patch", "post"}:
+            body = {"expected_revision": 1, **(body or {})}
         response = client.request(method.upper(), path, json=body, headers=outsider_headers)
         assert response.status_code == 404, (method, path, response.text)
 
-    assert client.post(
+    assert versioned_post(client,
         f"/workspaces/{workspace_id}/members",
         json={"login": member["login"]},
         headers=headers,
     ).status_code == 201
     member_headers = auth_header(member)
     assert client.get(f"/boards/{board['id']}", headers=member_headers).status_code == 200
-    assert client.post(
+    assert versioned_post(client,
         f"/documents/{document['id']}/versions",
         json={"title": "Версия 2", "content": "updated"},
         headers=member_headers,
     ).status_code == 403
-    assert client.post(
+    assert versioned_post(client,
         f"/documents/{document['id']}/versions",
         json={"title": "Версия 2", "content": "updated"},
         headers=headers,
     ).status_code == 200
-    restored = client.post(
+    restored = versioned_post(client,
         f"/documents/{document['id']}/restore/{version_id}",
         headers=headers,
     )
@@ -177,10 +175,10 @@ def test_task_assignee_must_be_workspace_member(client, users):
     outsider = users()
     headers = auth_header(owner)
     workspace_id = client.get("/workspaces", headers=headers).json()[0]["id"]
-    board = client.post("/boards", json={"title": "Доска", "workspace_id": workspace_id}, headers=headers).json()
+    board = versioned_post(client, "/boards", json={"title": "Доска", "workspace_id": workspace_id}, headers=headers).json()
     column = add_column(client, board, headers)
 
-    response = client.post(
+    response = versioned_post(client,
         "/tasks",
         json={"board_id": board["id"], "column_id": column["id"], "title": "Задача", "assignee_id": outsider["id"]},
         headers=headers,
@@ -193,18 +191,18 @@ def test_task_assignee_can_be_set_and_cleared_for_workspace_member(client, users
     member = users()
     headers = auth_header(owner)
     workspace_id = client.get("/workspaces", headers=headers).json()[0]["id"]
-    assert client.post(
+    assert versioned_post(client,
         f"/workspaces/{workspace_id}/members",
         json={"login": member["login"]},
         headers=headers,
     ).status_code == 201
-    board = client.post(
+    board = versioned_post(client,
         "/boards",
         json={"title": "Доска", "workspace_id": workspace_id},
         headers=headers,
     ).json()
     column = add_column(client, board, headers)
-    task = client.post(
+    task = versioned_post(client,
         "/tasks",
         json={"board_id": board["id"], "column_id": column["id"], "title": "Задача", "assignee_id": member["id"]},
         headers=headers,
@@ -212,7 +210,7 @@ def test_task_assignee_can_be_set_and_cleared_for_workspace_member(client, users
     assert task.status_code == 201
     assert task.json()["assignee_id"] == member["id"]
 
-    cleared = client.patch(
+    cleared = versioned_patch(client,
         f"/tasks/{task.json()['id']}",
         json={"assignee_id": None},
         headers=headers,
@@ -244,7 +242,7 @@ def test_database_schema_is_at_current_migration():
             await test_engine.dispose()
 
     revision, tables = asyncio.run(read_schema())
-    assert revision == "c92f01a7de34"
+    assert revision == "3a716f092ef1"
     assert {"workspaces", "workspace_members", "activity_logs", "folders", "board_columns"} <= tables
 
 
@@ -253,34 +251,34 @@ def test_columns_visibility_search_and_folder_tree(client, users):
     headers = auth_header(owner)
     workspace_id = client.get("/workspaces", headers=headers).json()[0]["id"]
     for other in (admin, member):
-        assert client.post(f"/workspaces/{workspace_id}/members", json={"login": other["login"]}, headers=headers).status_code == 201
-    assert client.patch(f"/workspaces/{workspace_id}/members/{admin['id']}", json={"role": "admin"}, headers=headers).status_code == 200
+        assert versioned_post(client, f"/workspaces/{workspace_id}/members", json={"login": other["login"]}, headers=headers).status_code == 201
+    assert versioned_patch(client, f"/workspaces/{workspace_id}/members/{admin['id']}", json={"role": "admin"}, headers=headers).status_code == 200
 
-    root = client.post("/folders", json={"workspace_id": workspace_id, "title": "Проект"}, headers=headers).json()
-    nested = client.post("/folders", json={"workspace_id": workspace_id, "parent_id": root["id"], "title": "Планы"}, headers=headers).json()
-    document_root = client.post("/folders", json={"workspace_id": workspace_id, "title": "Тексты", "kind": "document"}, headers=headers).json()
+    root = versioned_post(client, "/folders", json={"workspace_id": workspace_id, "title": "Проект"}, headers=headers).json()
+    nested = versioned_post(client, "/folders", json={"workspace_id": workspace_id, "parent_id": root["id"], "title": "Планы"}, headers=headers).json()
+    document_root = versioned_post(client, "/folders", json={"workspace_id": workspace_id, "title": "Тексты", "kind": "document"}, headers=headers).json()
     assert root["kind"] == nested["kind"] == "board"
     assert document_root["kind"] == "document"
     assert [folder["id"] for folder in client.get(f"/folders?workspace_id={workspace_id}&kind=document", headers=headers).json()] == [document_root["id"]]
-    assert client.patch(f"/folders/{root['id']}", json={"parent_id": nested["id"]}, headers=headers).status_code == 400
-    board = client.post("/boards", json={"workspace_id": workspace_id, "title": "Доска", "folder_id": nested["id"]}, headers=headers).json()
-    assert client.post("/boards", json={"workspace_id": workspace_id, "title": "Неверная папка", "folder_id": document_root["id"]}, headers=headers).status_code == 404
-    document = client.post("/documents", json={"workspace_id": workspace_id, "title": "Материал", "folder_id": document_root["id"]}, headers=headers)
+    assert versioned_patch(client, f"/folders/{root['id']}", json={"parent_id": nested["id"]}, headers=headers).status_code == 400
+    board = versioned_post(client, "/boards", json={"workspace_id": workspace_id, "title": "Доска", "folder_id": nested["id"]}, headers=headers).json()
+    assert versioned_post(client, "/boards", json={"workspace_id": workspace_id, "title": "Неверная папка", "folder_id": document_root["id"]}, headers=headers).status_code == 404
+    document = versioned_post(client, "/documents", json={"workspace_id": workspace_id, "title": "Материал", "folder_id": document_root["id"]}, headers=headers)
     assert document.status_code == 201
     found_document = client.get(f"/search?workspace_id={workspace_id}&q=Материал", headers=headers)
     assert found_document.status_code == 200
     assert found_document.json()[0]["user_login"] == owner["login"]
     assert found_document.json()[0]["folder_id"] == document_root["id"]
-    assert client.post("/documents", json={"workspace_id": workspace_id, "title": "Неверная папка", "folder_id": root["id"]}, headers=headers).status_code == 404
+    assert versioned_post(client, "/documents", json={"workspace_id": workspace_id, "title": "Неверная папка", "folder_id": root["id"]}, headers=headers).status_code == 404
     assert board["columns"] == []
     first = add_column(client, board, headers, "Очередь")
     second = add_column(client, board, headers, "Делаю")
-    assert client.patch(f"/boards/{board['id']}/columns/{second['id']}", json={"position": 0}, headers=headers).status_code == 200
-    assigned = client.post("/tasks", json={"board_id": board["id"], "column_id": first["id"], "title": "секретный текст", "assignee_id": member["id"]}, headers=headers).json()
-    own = client.post("/tasks", json={"board_id": board["id"], "column_id": first["id"], "title": "мой текст", "assignee_id": owner["id"]}, headers=headers).json()
+    assert versioned_patch(client, f"/boards/{board['id']}/columns/{second['id']}", json={"position": 0}, headers=headers).status_code == 200
+    assigned = versioned_post(client, "/tasks", json={"board_id": board["id"], "column_id": first["id"], "title": "секретный текст", "assignee_id": member["id"]}, headers=headers).json()
+    own = versioned_post(client, "/tasks", json={"board_id": board["id"], "column_id": first["id"], "title": "мой текст", "assignee_id": owner["id"]}, headers=headers).json()
     assert [task["id"] for task in client.get(f"/boards/{board['id']}", headers=auth_header(member)).json()["tasks"]] == [assigned["id"]]
     assert client.get(f"/tasks/{own['id']}", headers=auth_header(member)).status_code == 404
-    assert client.patch(f"/tasks/{assigned['id']}", json={"title": "нельзя"}, headers=auth_header(member)).status_code == 403
+    assert versioned_patch(client, f"/tasks/{assigned['id']}", json={"title": "нельзя"}, headers=auth_header(member)).status_code == 403
     assert [task["id"] for task in client.get(f"/boards/{board['id']}", headers=headers).json()["tasks"]] == [own["id"]]
     assert len(client.get(f"/boards/{board['id']}?all_tasks=true", headers=auth_header(admin)).json()["tasks"]) == 2
     assert len(client.get(f"/search?workspace_id={workspace_id}&q=секретный", headers=auth_header(member)).json()) == 1
@@ -293,25 +291,25 @@ def test_columns_visibility_search_and_folder_tree(client, users):
     assert client.delete(f"/boards/{board['id']}/columns/{second['id']}?delete_tasks=true", headers=headers).status_code == 204
     assert client.get(f"/tasks/{assigned['id']}", headers=headers).status_code == 404
     assert client.delete(f"/folders/{root['id']}", headers=headers).status_code == 400
-    assert client.post("/folders", json={"workspace_id": workspace_id, "title": "Запрещено"}, headers=auth_header(member)).status_code == 403
+    assert versioned_post(client, "/folders", json={"workspace_id": workspace_id, "title": "Запрещено"}, headers=auth_header(member)).status_code == 403
 
 
 def test_encrypted_login_and_other_users_document_update_keep_session(client, users):
     owner, viewer = users(), users()
     headers = auth_header(owner)
     workspace_id = client.get("/workspaces", headers=headers).json()[0]["id"]
-    assert client.post(f"/workspaces/{workspace_id}/members", json={"login": viewer["login"]}, headers=headers).status_code == 201
-    document = client.post("/documents", json={"workspace_id": workspace_id, "title": "Черновик"}, headers=headers).json()
+    assert versioned_post(client, f"/workspaces/{workspace_id}/members", json={"login": viewer["login"]}, headers=headers).status_code == 201
+    document = versioned_post(client, "/documents", json={"workspace_id": workspace_id, "title": "Черновик"}, headers=headers).json()
     UUID(document["id"])
     before = client.get(f"/documents/{document['id']}", headers=auth_header(viewer))
     assert before.status_code == 200
-    saved = client.post(f"/documents/{document['id']}/versions", json={"title": "Черновик", "content": "новый текст"}, headers=headers)
+    saved = versioned_post(client, f"/documents/{document['id']}/versions", json={"title": "Черновик", "content": "новый текст"}, headers=headers)
     assert saved.status_code == 200
     assert len(saved.json()["versions"]) == 1
-    repeated = client.post(f"/documents/{document['id']}/versions", json={"title": "Черновик", "content": "новый текст"}, headers=headers)
+    repeated = versioned_post(client, f"/documents/{document['id']}/versions", json={"title": "Черновик", "content": "новый текст"}, headers=headers)
     assert repeated.status_code == 200
     assert len(repeated.json()["versions"]) == 1
     assert client.get("/auth/me", headers=auth_header(viewer)).status_code == 200
     assert client.get(f"/documents/{document['id']}", headers=auth_header(viewer)).json()["content"] == "новый текст"
-    assert client.post("/auth/login", json={"login": owner["login"], "password": "Integration123!"}).status_code == 422
-    assert client.post("/auth/login", json=credentials(client, owner["login"], "Integration123!")).status_code == 200
+    assert versioned_post(client, "/auth/login", json={"login": owner["login"], "password": "Integration123!"}).status_code == 422
+    assert versioned_post(client, "/auth/login", json=credentials(client, owner["login"], "Integration123!")).status_code == 200

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from app.errors import fail
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +16,8 @@ from app.schemas import (
     WorkspaceRead,
     WorkspaceUpdate,
 )
+
+from app.notifications import notify
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
@@ -41,7 +44,7 @@ def _member_read(member) -> WorkspaceMemberRead:
 
 @router.get("", response_model=list[WorkspaceRead])
 async def get_workspaces(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     workspaces = await crud.get_workspaces(db, user.id)
@@ -51,7 +54,7 @@ async def get_workspaces(
 @router.post("", response_model=WorkspaceRead, status_code=status.HTTP_201_CREATED)
 async def create_workspace(
     data: WorkspaceCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     workspace = await crud.create_workspace(db, data.name.strip(), user.id)
@@ -63,7 +66,7 @@ async def create_workspace(
 async def update_workspace(
     workspace_id: int,
     data: WorkspaceUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     await access.require_owner(db, workspace_id, user)
@@ -76,27 +79,27 @@ async def update_workspace(
 @router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workspace(
     workspace_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     await access.require_owner(db, workspace_id, user)
     workspaces = await crud.get_workspaces(db, user.id)
     owned = [item for item in workspaces if item.owner_id == user.id]
     if len(owned) <= 1:
-        raise HTTPException(status_code=400, detail="Нельзя удалить единственное своё пространство")
+        fail(400, "last_workspace")
     await crud.delete_workspace(db, workspace_id)
 
 
 @router.get("/{workspace_id}/members", response_model=list[WorkspaceMemberRead])
 async def get_members(
     workspace_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     await access.require_member(db, workspace_id, user)
     workspace = await crud.get_workspace(db, workspace_id)
     if workspace is None:
-        raise HTTPException(status_code=404, detail="Пространство не найдено")
+        fail(404, "workspace_not_found")
     return [_member_read(item) for item in workspace.members]
 
 
@@ -104,18 +107,19 @@ async def get_members(
 async def invite_member(
     workspace_id: int,
     data: MemberInvite,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     await access.require_manager(db, workspace_id, user)
     invited = await crud.get_user_by_login(db, data.login)
     if invited is None:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+        fail(404, "user_not_found")
     existing = await crud.get_membership(db, workspace_id, invited.id)
     if existing is not None:
-        raise HTTPException(status_code=400, detail="Уже в пространстве")
+        fail(400, "member_exists")
     await crud.add_workspace_member(db, workspace_id, invited.id)
     await crud.log_activity(db, workspace_id, user.id, "member.invite", "member", invited.id, invited.login)
+    await notify(db, workspace_id, user.id, "member.invite", [invited.id], (await crud.get_workspace(db, workspace_id)).name, invited.id)
     workspace = await crud.get_workspace(db, workspace_id)
     found = next(item for item in workspace.members if item.user_id == invited.id)
     return _member_read(found)
@@ -125,17 +129,17 @@ async def invite_member(
 async def remove_member(
     workspace_id: int,
     user_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     actor = await access.require_manager(db, workspace_id, user)
     if user_id == user.id:
-        raise HTTPException(status_code=400, detail="Нельзя удалить себя")
+        fail(400, "self_remove")
     member = await crud.get_membership(db, workspace_id, user_id)
     if member is None:
-        raise HTTPException(status_code=404, detail="Участник не найден")
+        fail(404, "member_not_found")
     if member.role == "owner" or (actor.role == "admin" and member.role != "member"):
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
+        fail(403, "forbidden")
     kicked = await crud.get_user(db, user_id)
     title = kicked.login if kicked is not None else ""
     await crud.delete_workspace_member(db, member)
@@ -147,16 +151,19 @@ async def update_member_role(
     workspace_id: int,
     user_id: int,
     data: MemberRoleUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     await access.require_owner(db, workspace_id, user)
     member = await crud.get_membership(db, workspace_id, user_id)
     if member is None:
-        raise HTTPException(status_code=404, detail="Участник не найден")
+        fail(404, "member_not_found")
     if member.role == "owner":
-        raise HTTPException(status_code=400, detail="Нельзя изменить роль владельца")
+        fail(400, "owner_role")
+    previous_role = member.role
     updated = await crud.update_workspace_member_role(db, member, data.role)
+    if previous_role != data.role:
+        await notify(db, workspace_id, user.id, "member.role", [user_id], (await crud.get_workspace(db, workspace_id)).name, user_id)
     changed = await crud.get_user(db, user_id)
     title = changed.login if changed is not None else ""
     await crud.log_activity(db, workspace_id, user.id, "member.role", "member", user_id, title)
@@ -171,7 +178,7 @@ async def update_member_role(
 @router.get("/{workspace_id}/activity", response_model=list[ActivityRead])
 async def get_activity(
     workspace_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     membership = await access.require_member(db, workspace_id, user)

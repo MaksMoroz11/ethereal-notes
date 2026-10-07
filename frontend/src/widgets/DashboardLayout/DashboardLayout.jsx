@@ -6,11 +6,13 @@ import { useBoardsStore } from '@/shared/store/boardsStore'
 import { useDocumentsStore } from '@/shared/store/documentsStore'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 import { useFoldersStore } from '@/shared/store/foldersStore'
+import { useWorkspaceSync } from '@/shared/lib/workspaceSync'
 
 export default function DashboardLayout() {
 	const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 	const loadWorkspaces = useWorkspaceStore(state => state.loadWorkspaces)
 	const activeWorkspaceId = useWorkspaceStore(state => state.activeId)
+	useWorkspaceSync(activeWorkspaceId)
 	const loadBoards = useBoardsStore(state => state.loadBoards)
 	const loadDocuments = useDocumentsStore(state => state.loadDocuments)
 	const loadFolders = useFoldersStore(state => state.loadFolders)

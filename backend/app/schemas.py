@@ -36,6 +36,7 @@ class TaskCreate(NamedModel):
 
 
 class TaskUpdate(RequiredPatchFields):
+    expected_revision: int = Field(ge=1)
     title: str | None = None
     description: str | None = None
     column_id: UUID | None = None
@@ -44,6 +45,7 @@ class TaskUpdate(RequiredPatchFields):
 
 
 class TaskRead(BaseModel):
+    revision: int
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -60,6 +62,9 @@ class TaskRead(BaseModel):
 
 
 class UserCreate(BaseModel):
+    consent: Literal[True]
+    consent_version: str
+    remember: bool = False
     login: str
     key_id: str
     encrypted_key: str
@@ -83,6 +88,7 @@ class UserRead(BaseModel):
 
 
 class LoginRequest(BaseModel):
+    remember: bool = False
     login: str
     key_id: str
     encrypted_key: str
@@ -91,7 +97,7 @@ class LoginRequest(BaseModel):
 
 
 class AuthResponse(BaseModel):
-    token: str
+    csrf_token: str
     user: UserRead
 
 
@@ -170,6 +176,7 @@ class ColumnRead(BaseModel):
 
 
 class BoardRead(BaseModel):
+    revision: int
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -190,6 +197,7 @@ class DocumentCreate(NamedModel):
 
 
 class DocumentUpdate(RequiredPatchFields):
+    expected_revision: int = Field(ge=1)
     title: str | None = None
     content: str | None = None
     folder_id: UUID | None = None
@@ -208,6 +216,7 @@ class FolderUpdate(NamedModel):
 
 
 class FolderRead(BaseModel):
+    revision: int
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -219,6 +228,7 @@ class FolderRead(BaseModel):
 
 
 class DocumentVersionCreate(NamedModel):
+    expected_revision: int = Field(ge=1)
     title: str
     content: str = ""
 
@@ -234,6 +244,7 @@ class DocumentVersionRead(BaseModel):
 
 
 class DocumentRead(BaseModel):
+    revision: int
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -267,3 +278,12 @@ class SearchResult(BaseModel):
     title: str
     user_login: str
     created_at: datetime
+
+
+class TaskMove(BaseModel):
+    column_id: UUID
+    expected_revision: int = Field(ge=1)
+
+
+class RevisionRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
