@@ -24,6 +24,17 @@ def check_origin(request: Request):
         fail(403, "csrf")
 
 
+async def require_guest(request: Request, db: AsyncSession):
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        return
+    session = await crud.get_session_by_token(db, token)
+    if session is not None:
+        if session.expires_at > datetime.utcnow():
+            fail(409, "already_authenticated")
+        await crud.delete_session(db, session)
+
+
 async def get_current_session(request: Request, db: AsyncSession = Depends(get_db, scope="function")):
     session = await crud.get_session_by_token(db, request.cookies.get(COOKIE_NAME, ""))
     if session is None or session.expires_at <= datetime.utcnow():
@@ -60,6 +71,7 @@ async def privacy():
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(data: UserCreate, request: Request, response: Response, db: AsyncSession = Depends(get_db, scope="function")):
     check_origin(request)
+    await require_guest(request, db)
     if data.consent_version != settings.consent_version:
         fail(422, "consent_outdated")
     try:
@@ -80,6 +92,7 @@ async def register(data: UserCreate, request: Request, response: Response, db: A
 @router.post("/login", response_model=AuthResponse)
 async def login(data: LoginRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db, scope="function")):
     check_origin(request)
+    await require_guest(request, db)
     try:
         password = decrypt_password(data)
     except ValueError as exc:
@@ -92,9 +105,6 @@ async def login(data: LoginRequest, request: Request, response: Response, db: As
         fail(401, "invalid_credentials")
     if upgraded is not None:
         user.password = upgraded
-    previous = await crud.get_session_by_token(db, request.cookies.get(COOKIE_NAME, ""))
-    if previous is not None:
-        await crud.delete_session(db, previous)
     session = await crud.create_session(db, user, data.remember)
     set_session_cookie(response, session, data.remember)
     return {"csrf_token": session.csrf_token, "user": user}

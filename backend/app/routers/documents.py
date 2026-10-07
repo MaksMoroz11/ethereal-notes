@@ -141,7 +141,7 @@ async def restore_document_version(
     document = await get_accessible_document(document_id, db, user)
     await access.require_manager(db, document.workspace_id, user)
     check_revision(document, data.expected_revision)
-    restored = await crud.restore_document_version(db, document, version_id)
+    restored = await crud.restore_document_version(db, document, version_id, user.id)
     if restored is None:
         fail(404, "version_not_found")
     await crud.log_activity(db, document.workspace_id, user.id, "document.restore", "document", document.id, restored.title)

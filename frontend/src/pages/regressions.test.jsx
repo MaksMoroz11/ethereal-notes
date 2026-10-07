@@ -76,6 +76,25 @@ it('waits for restoration and keeps the draft visible after a failed response', 
 	expect(screen.getByLabelText('Текст документа')).toHaveValue('Draft')
 })
 
+it('confirms a restore without deleting history and shows the source version of the new entry', async () => {
+	const first = { id: 7, title: 'Первая', content: 'First', author_login: 'owner', created_at: '2026-09-29T10:00:00' }
+	const second = { ...first, id: 8, title: 'Вторая', content: 'Second', created_at: '2026-09-30T10:00:00' }
+	useDocumentsStore.setState({ documents: [{ ...document, title: second.title, content: second.content, versions: [second, first] }] })
+	fetch.mockResolvedValueOnce(response({ ...document, title: first.title, content: first.content, revision: 2, versions: [{ ...first, id: 9, restored_from_id: first.id, created_at: '2026-10-01T10:00:00' }, second, first] }))
+	render(<Documents />)
+	await userEvent.click(screen.getAllByRole('button', { name: 'Откатить' })[1])
+	const dialog = screen.getByRole('dialog')
+	expect(dialog).toHaveTextContent('Создадим новую версию со ссылкой на v1')
+	expect(dialog).toHaveTextContent('Все сохранённые версии останутся в истории')
+	expect(dialog).not.toHaveTextContent('Будет удалено')
+	await userEvent.click(within(dialog).getByRole('button', { name: 'Откатить' }))
+	expect(await screen.findByText('Восстановлена из v1')).toBeInTheDocument()
+	expect(screen.getByLabelText('Текст документа')).toHaveValue('First')
+	expect(screen.getAllByRole('button', { name: 'Откатить' })).toHaveLength(3)
+	await userEvent.click(screen.getByRole('button', { name: 'Восстановлена из v1' }))
+	expect(screen.getByText(/Просмотр версии от 29.09.2026/)).toBeInTheDocument()
+})
+
 for (const view of ['self', 'all', '2']) {
 	it(`deletes the last column including hidden tasks in view ${view}`, async () => {
 		const tasks = [{ id: 'task-1', column_id: 'column', assignee_id: 2, author_id: 1, title: 'Task', tags: [], uid: '1001' }]

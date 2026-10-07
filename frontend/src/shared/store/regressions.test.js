@@ -113,6 +113,7 @@ describe('workspace and session isolation', () => {
 		const old = deferred()
 		fetch.mockReturnValueOnce(old.promise)
 		const request = api('/auth/me').catch(error => error)
+		useAuthStore.getState().clearSession({ broadcastChange: false })
 		fetch.mockResolvedValueOnce(response({ csrf_token: 'csrf-2', user: { id: 2, login: 'next' } }))
 		await useAuthStore.getState().login('next', 'password')
 		old.resolve(response({ detail: 'expired' }, 401))

@@ -162,6 +162,7 @@ class DocumentVersion(Base):
     title: Mapped[str] = mapped_column()
     content: Mapped[str] = mapped_column(Text, default="")
     author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    restored_from_id: Mapped[int | None] = mapped_column(ForeignKey("document_versions.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
     document: Mapped["Document"] = relationship(back_populates="versions")

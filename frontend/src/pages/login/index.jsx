@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/shared/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,10 @@ export default function Login() {
 	const [searchParams] = useSearchParams()
 	const register = useAuthStore(state => state.register)
 	const login = useAuthStore(state => state.login)
+	const authenticated = useAuthStore(state => state.authenticated)
+	const validated = useAuthStore(state => state.validated)
+	const sessionError = useAuthStore(state => state.error)
+	const validateSession = useAuthStore(state => state.validateSession)
 
 	const [mode, setMode] = useState(searchParams.get('mode') === 'register' ? 'register' : 'login')
 	const [loginValue, setLoginValue] = useState('')
@@ -25,10 +29,12 @@ export default function Login() {
 	const privacy = usePrivacyStore(state => state.config)
 	const loadPrivacy = usePrivacyStore(state => state.load)
 	const privacyError = usePrivacyStore(state => state.error)
-	useEffect(() => { if (mode === 'register' && !privacy) loadPrivacy() }, [mode, privacy, loadPrivacy])
+	useEffect(() => { if (!validated) validateSession() }, [validated, validateSession])
+	useEffect(() => { if (validated && !authenticated && mode === 'register' && !privacy) loadPrivacy() }, [validated, authenticated, mode, privacy, loadPrivacy])
 
 	async function submit(e) {
 		e.preventDefault()
+		if (loading) return
 		setError('')
 
 		if (!LOGIN_PATTERN.test(loginValue)) {
@@ -54,6 +60,10 @@ export default function Login() {
 		}
 	}
 
+	if (!validated) return <div className="px-8 py-12 text-center text-sm">
+		{sessionError ? <><p>{sessionError}</p><button type="button" onClick={validateSession}>{authText.retry}</button></> : authText.checkingSession}
+	</div>
+	if (authenticated) return <Navigate to="/dashboard" replace />
 	return (
 		<section className="flex min-h-[calc(100vh-160px)] items-center justify-center px-4 py-12 animate-in fade-in duration-300">
 			<div className="w-full max-w-md rounded-xl border border-border border-l-[3px] border-l-primary bg-card p-8 shadow-lg">

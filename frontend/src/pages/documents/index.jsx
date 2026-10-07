@@ -106,7 +106,6 @@ function DocumentWorkspace({ doc, isManager }) {
 	const preview = previewId ? doc.versions.find(version => version.id === previewId) : null
 	const confirmIndex = confirmId ? doc.versions.findIndex(version => version.id === confirmId) : -1
 	const confirmVersion = confirmIndex >= 0 ? doc.versions[confirmIndex] : null
-	const dropCount = Math.max(confirmIndex, 0)
 	const shownUpdatedAt = preview ? preview.created_at : doc.updated_at
 	const shownUpdatedBy = preview ? preview.author_login || documentText.unknownAuthor : doc.updated_by || doc.author_login || documentText.unknownAuthor
 	const statusLabel = saveStatus === 'saving' ? documentText.saving : hasUnsavedChanges ? documentText.unsaved : documentText.saved
@@ -235,6 +234,9 @@ function DocumentWorkspace({ doc, isManager }) {
 										</span>
 										<span className="truncate text-sm text-secondary-foreground">{version.title}</span>
 									</button>
+									{version.restored_from_id ? <button type="button" className="self-start text-left text-[0.7rem] text-primary hover:underline" onClick={() => setPreviewId(version.restored_from_id)}>
+										{documentText.restoredFrom(doc.versions.length - doc.versions.findIndex(item => item.id === version.restored_from_id))}
+									</button> : null}
 									{isManager ? <Button
 										type="button"
 										variant="outline"
@@ -257,10 +259,7 @@ function DocumentWorkspace({ doc, isManager }) {
 				title={documentText.restoreTitle}
 				text={
 					confirmVersion
-						? `Вернёмся к версии от ${formatDate(confirmVersion.created_at)}.` +
-							(dropCount > 0
-								? ` Будет удалено более новых версий: ${dropCount}.`
-								: ' Более новых версий нет.')
+						? documentText.restoreConfirmation(doc.versions.length - confirmIndex, formatDate(confirmVersion.created_at))
 						: ''
 				}
 				confirmLabel={documentText.restore}

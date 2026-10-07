@@ -240,6 +240,7 @@ class DocumentVersionRead(BaseModel):
     title: str
     content: str
     author_login: str
+    restored_from_id: int | None = None
     created_at: datetime
 
 

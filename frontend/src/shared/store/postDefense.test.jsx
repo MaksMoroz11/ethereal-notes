@@ -104,6 +104,7 @@ it('preserves a draft during a remote update', async () => {
 })
 
 it('requires an unchecked separate consent before registering', async () => {
+	useAuthStore.setState({ user: null, authenticated: false, validated: true })
 	usePrivacyStore.setState({ config: { consent_version: '2026-10-07' }, error: '' })
 	render(<MemoryRouter initialEntries={['/login?mode=register']}><Login /></MemoryRouter>)
 	const checkbox = screen.getByRole('checkbox', { name: 'Я даю согласие на обработку персональных данных' })

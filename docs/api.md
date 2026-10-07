@@ -18,7 +18,9 @@
 
 Успешные register/login возвращают `{user, csrf_token}` и Set-Cookie. Без запоминания cookie сессионная, серверный TTL 24 часа; с запоминанием Max-Age и TTL 30 дней. HttpOnly и SameSite=Lax включены всегда, Secure — в HTTPS-конфигурации.
 
-Ошибка: `{ "detail": "Текст", "code": "revision_conflict" }`. Основные коды: unauthorized, invalid_credentials, forbidden, csrf, consent_required, consent_outdated, validation_error, revision_conflict. Каталог остальных кодов: `app/errors.py`. 404 скрывает недоступную сущность; 403 означает отказ в операции; 409 — конфликт ревизии; 422 — неверные поля. Неизвестный клиенту код использует detail.
+При действующей cookie-сессии register/login возвращают 409 с кодом `already_authenticated`, не создавая пользователя или новую сессию и не заменяя cookie. Для смены аккаунта сначала выполните logout. Истёкшая или отозванная сессия повторному входу не мешает. Авторизованного посетителя страницы `/login` frontend перенаправляет на `/dashboard` после проверки сессии.
+
+Ошибка: `{ "detail": "Текст", "code": "revision_conflict" }`. Основные коды: unauthorized, invalid_credentials, already_authenticated, forbidden, csrf, consent_required, consent_outdated, validation_error, revision_conflict. Каталог остальных кодов: `app/errors.py`. 404 скрывает недоступную сущность; 403 означает отказ в операции; 409 — конфликт ревизии или повторная авторизация; 422 — неверные поля. Неизвестный клиенту код использует detail.
 
 ## Пространства и структура
 
@@ -54,6 +56,8 @@ GET boards требует workspace_id. Параметры all_tasks=true или
 | GET /documents/{uuid}/export?format=pdf\|docx | Выгрузка текущей сохранённой редакции |
 
 PATCH задачи/документа, move, versions и restore требуют expected_revision>=1 из последнего ответа чтения. Ответ изменённой сущности содержит актуальную revision. Сохранение с устаревшей ревизией возвращает 409 и не меняет данные. Move в текущую колонку не создаёт повторный журнал или уведомление.
+
+Restore создаёт новую версию с содержимым выбранной старой и `restored_from_id`, указывающим на её id. Автор новой версии — пользователь, выполнивший откат. Остальные версии не удаляются; ссылка на восстановленную версию тоже сохраняется при повторном откате. У обычных и существующих версий restored_from_id=null.
 
 Экспорт доступен всем читателям. PDF: application/pdf; DOCX: application/vnd.openxmlformats-officedocument.wordprocessingml.document. Ответ содержит Content-Disposition с UTF-8 именем и Cache-Control: no-store. Слишком большой текст — 413, ошибка генератора или превышение 30 секунд — 503, неподдерживаемый format — 422. Поддерживаются заголовки, абзацы, списки, цитаты, выделение, ссылки и код; внешние изображения, стили и загрузка ресурсов исключены. [WeasyPrint](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html), [python-docx](https://python-docx.readthedocs.io/en/latest/user/quickstart.html).
 

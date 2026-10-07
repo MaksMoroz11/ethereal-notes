@@ -3,4 +3,5 @@ export const authText = {
 	loginInvalid: 'Логин: только латиница, цифры и _', passwordShort: 'Пароль минимум 4 символа',
 	consentRequired: 'Подтвердите согласие на обработку персональных данных', remember: 'Запомнить меня',
 	consentLabel: 'Я даю согласие на обработку персональных данных',
+	checkingSession: 'Проверка сессии…',
 }

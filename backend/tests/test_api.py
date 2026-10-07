@@ -157,7 +157,8 @@ def test_workspace_data_isolation_and_document_versions(client, users):
     )
     assert restored.status_code == 200
     assert restored.json()["title"] == "Версия 1"
-    assert len(restored.json()["versions"]) == 1
+    assert len(restored.json()["versions"]) == 3
+    assert restored.json()["versions"][0]["restored_from_id"] == version_id
     activity = client.get(f"/workspaces/{workspace_id}/activity", headers=headers)
     assert activity.status_code == 200
     assert {item["action"] for item in activity.json()} >= {
@@ -242,7 +243,7 @@ def test_database_schema_is_at_current_migration():
             await test_engine.dispose()
 
     revision, tables = asyncio.run(read_schema())
-    assert revision == "3a716f092ef1"
+    assert revision == "7f9d24b601ac"
     assert {"workspaces", "workspace_members", "activity_logs", "folders", "board_columns"} <= tables
 
 

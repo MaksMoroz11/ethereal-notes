@@ -306,21 +306,23 @@ async def restore_document_version(
     db: AsyncSession,
     document: Document,
     version_id: int,
+    author_id: int,
 ) -> Document | None:
     version = next((item for item in document.versions if item.id == version_id), None)
     if version is None:
         return None
-    newer = [
-        item
-        for item in document.versions
-        if item.created_at > version.created_at
-        or (item.created_at == version.created_at and item.id > version.id)
-    ]
-    for item in newer:
-        await db.delete(item)
+    now = datetime.utcnow()
     document.title = version.title
     document.content = version.content
-    document.updated_at = datetime.utcnow()
+    document.updated_at = now
+    db.add(DocumentVersion(
+        document_id=document.id,
+        title=version.title,
+        content=version.content,
+        author_id=author_id,
+        restored_from_id=version.id,
+        created_at=now,
+    ))
     await db.flush()
     return await get_document(db, document.id)
 
