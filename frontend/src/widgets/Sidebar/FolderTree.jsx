@@ -30,6 +30,7 @@ import { getSessionVersion } from '@/shared/api/client'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 
 const DRAG_TYPE = 'application/x-ethereal-folder-item'
+const INDENT = 20
 
 function HierarchyActions({ label, disabled, children }) {
 	const trigger = useRef(null)
@@ -250,9 +251,10 @@ export default function FolderTree({ folders, items, isDocs, isManager, activeId
 			onDragEnd={endDrag}
 			onDragOver={event => overFolder(event, parentId)} onDragLeave={leaveFolder} onDrop={event => dropInto(event, parentId)}
 			className={cn('group flex min-w-0 items-center gap-1 rounded-md transition-colors hover:bg-accent animate-in fade-in duration-200 motion-reduce:animate-none', isManager && !moving && 'cursor-grab', (dragging?.id === item.id || moving === item.id) && 'opacity-50')}
-			style={{ paddingLeft: Math.min(depth, 4) * 8 }}
+			style={{ paddingLeft: Math.min(depth, 4) * INDENT }}
 		>
-			<button type="button" draggable={isManager && !moving} onClick={() => onSelect(item.id)} className={cn('flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground', activeId === item.id && 'bg-primary/20 font-medium text-foreground')}>
+			<button type="button" draggable={isManager && !moving} onClick={() => onSelect(item.id)} className={cn('flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left text-xs text-muted-foreground', activeId === item.id && 'bg-primary/20 font-medium text-foreground')}>
+				<span aria-hidden="true" className="h-3 w-3 shrink-0" />
 				{isDocs ? <FileText className="h-3.5 w-3.5 shrink-0" /> : <LayoutGrid className="h-3.5 w-3.5 shrink-0" />}
 				<span className="truncate">{item.title}</span>
 			</button>
@@ -277,9 +279,9 @@ export default function FolderTree({ folders, items, isDocs, isManager, activeId
 		>
 			<div
 				className={cn('group flex min-w-0 items-center gap-0.5 rounded-md hover:bg-accent', dropTarget === folder.id && 'bg-primary/15 ring-1 ring-primary')}
-				style={{ paddingLeft: Math.min(depth, 4) * 8 }}
+				style={{ paddingLeft: Math.min(depth, 4) * INDENT }}
 			>
-				<button type="button" draggable={isManager && !moving} onClick={() => setOpen(current => ({ ...current, [folder.id]: !expanded }))} className="flex min-w-0 flex-1 items-center gap-1 px-1 py-1.5 text-left text-xs font-medium text-foreground">
+				<button type="button" draggable={isManager && !moving} onClick={() => setOpen(current => ({ ...current, [folder.id]: !expanded }))} className="flex min-w-0 flex-1 items-center gap-2 px-1 py-1.5 text-left text-xs font-medium text-foreground">
 					{expanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
 					<Folder className="h-3.5 w-3.5 shrink-0" />
 					<span className="truncate">{folder.title}</span>
