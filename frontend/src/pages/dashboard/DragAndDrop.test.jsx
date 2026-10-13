@@ -125,7 +125,7 @@ it('retains the column title on failure and adds the new column without remounti
 	fireEvent.submit(title.closest('form'))
 	await waitFor(() => expect(ui.column('review')).not.toBeNull())
 	expect(ui.column('plan')).toBe(oldColumn)
-	expect(title).toHaveValue('')
+	await waitFor(() => expect(title).toHaveValue(''))
 	expect(fetch.mock.calls.every(call => call[1].method === 'POST')).toBe(true)
 })
 

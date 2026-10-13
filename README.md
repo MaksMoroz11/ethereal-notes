@@ -48,6 +48,8 @@
 docker compose up --build
 ```
 
+Открой [http://localhost](http://localhost) или [http://127.0.0.1](http://127.0.0.1). API вызывается через `/api` на выбранном адресе. Если в старом `.env` был абсолютный локальный адрес `VITE_API_URL`, замени его на `/api` и пересобери frontend.
+
 Для запуска на сервере с HTTPS создай `.env` на основе [.env.example](.env.example):
 
 ```bash

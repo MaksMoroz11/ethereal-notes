@@ -32,6 +32,7 @@ it('uses cookies and CSRF without exposing an authorization token', async () => 
 	fetch.mockResolvedValueOnce(response({ id: 1 }))
 	await api('/workspaces', { method: 'POST', body: { name: 'Команда' } })
 	const options = fetch.mock.calls[0][1]
+	expect(fetch.mock.calls[0][0]).toBe('/api/workspaces')
 	expect(options.credentials).toBe('include')
 	expect(options.headers['X-CSRF-Token']).toBe('csrf-secret')
 	expect(options.headers.Authorization).toBeUndefined()
