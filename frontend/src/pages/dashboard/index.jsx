@@ -1,13 +1,14 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus } from 'lucide-react'
+import { LoaderCircle, Plus } from 'lucide-react'
 import { useBoardsStore } from '@/shared/store/boardsStore'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
 import { useAuthStore } from '@/shared/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import SelectMenu from '@/components/ui/select-menu'
-import { api } from '@/shared/api/client'
+import { api, getSessionVersion } from '@/shared/api/client'
+import { taskText } from '@/shared/messages/tasks'
 import {
 	Dialog,
 	DialogContent,
@@ -38,6 +39,11 @@ export default function Dashboard() {
 	const user = useAuthStore(state => state.user)
 	const isManager = workspace?.role === 'owner' || workspace?.role === 'admin'
 	const [columnTitle, setColumnTitle] = useState('')
+	const [creatingColumn, setCreatingColumn] = useState(false)
+	const columnRequest = useRef(false)
+	const drag = useRef(null)
+	const [draggingTaskId, setDraggingTaskId] = useState(null)
+	const [dropColumnId, setDropColumnId] = useState(null)
 	const [editingColumn, setEditingColumn] = useState(null)
 	const [pendingColumn, setPendingColumn] = useState(null)
 	const [targetColumn, setTargetColumn] = useState('')
@@ -51,6 +57,11 @@ export default function Dashboard() {
 	const [deletingTask, setDeletingTask] = useState(false)
 	const [searchParams, setSearchParams] = useSearchParams()
 	const requestedTask = searchParams.get('task')
+	const endTaskDrag = useCallback(() => {
+		drag.current = null
+		setDraggingTaskId(null)
+		setDropColumnId(null)
+	}, [])
 
 	useEffect(() => {
 		setDrafts({})
@@ -59,7 +70,9 @@ export default function Dashboard() {
 		setEditingColumn(null)
 		setOpenId(null)
 		setActionError('')
-	}, [board?.id])
+		endTaskDrag()
+	}, [board?.id, endTaskDrag])
+	useEffect(endTaskDrag, [view, user?.id, isManager, endTaskDrag])
 
 	function closeTask() {
 		setOpenId(null)
@@ -75,13 +88,75 @@ export default function Dashboard() {
 		Promise.resolve(action).catch(err => setActionError(err.message))
 	}, [])
 
-	function submitColumn(event) {
+	async function submitColumn(event) {
 		event.preventDefault()
 		const title = columnTitle.trim()
-		if (!title) return
-		run(createColumn(title))
-		setColumnTitle('')
+		if (!title || columnRequest.current) return
+		const boardId = board.id
+		const session = getSessionVersion()
+		columnRequest.current = true
+		setCreatingColumn(true)
+		setActionError('')
+		try {
+			await createColumn(title)
+			if (useBoardsStore.getState().activeId === boardId && getSessionVersion() === session) setColumnTitle('')
+		} catch (err) {
+			if (useBoardsStore.getState().activeId === boardId && getSessionVersion() === session) setActionError(err.message)
+		} finally { columnRequest.current = false; setCreatingColumn(false) }
 	}
+
+	const startTaskDrag = useCallback((event, taskId) => {
+		const state = useBoardsStore.getState()
+		const currentBoard = state.boards.find(item => item.id === state.activeId)
+		const task = currentBoard?.tasks.find(item => item.id === taskId)
+		const user = useAuthStore.getState().user
+		const workspace = useWorkspaceStore.getState().workspaces.find(item => item.id === useWorkspaceStore.getState().activeId)
+		const manager = ['owner', 'admin'].includes(workspace?.role)
+		if (!task || state.moving[taskId] || !(manager || task.assignee_id === user?.id)) { event.preventDefault(); return }
+		event.stopPropagation()
+		drag.current = { taskId, boardId: currentBoard.id, workspaceId: state.workspaceId, view: state.view, session: getSessionVersion() }
+		event.dataTransfer.effectAllowed = 'move'
+		event.dataTransfer.setData('application/x-ethereal-task', taskId)
+		setDraggingTaskId(taskId)
+		setDropColumnId(null)
+		setActionError('')
+	}, [])
+
+	const taskDropAllowed = useCallback(columnId => {
+		const context = drag.current
+		const state = useBoardsStore.getState()
+		if (!context || context.session !== getSessionVersion() || context.boardId !== state.activeId || context.view !== state.view
+			|| context.workspaceId !== useWorkspaceStore.getState().activeId || state.moving[context.taskId]) return false
+		const currentBoard = state.boards.find(item => item.id === context.boardId)
+		const task = currentBoard?.tasks.find(item => item.id === context.taskId)
+		const user = useAuthStore.getState().user
+		const role = useWorkspaceStore.getState().workspaces.find(item => item.id === context.workspaceId)?.role
+		return Boolean(task && task.column_id !== columnId && currentBoard.columns.some(item => item.id === columnId)
+			&& (['owner', 'admin'].includes(role) || task.assignee_id === user?.id))
+	}, [])
+
+	const overTaskColumn = useCallback((event, columnId) => {
+		event.stopPropagation()
+		if (!taskDropAllowed(columnId)) { setDropColumnId(null); return }
+		event.preventDefault()
+		event.dataTransfer.dropEffect = 'move'
+		setDropColumnId(columnId)
+	}, [taskDropAllowed])
+	const leaveTaskColumn = useCallback(event => {
+		if (!event.currentTarget.contains(event.relatedTarget)) setDropColumnId(null)
+	}, [])
+	const dropTask = useCallback(async (event, columnId) => {
+		event.preventDefault()
+		event.stopPropagation()
+		const allowed = taskDropAllowed(columnId)
+		const context = drag.current
+		endTaskDrag()
+		if (!allowed) return
+		try { await useBoardsStore.getState().moveTask(context.taskId, columnId) }
+		catch (err) {
+			if (context.boardId === useBoardsStore.getState().activeId && context.session === getSessionVersion()) setActionError(err.message)
+		}
+	}, [endTaskDrag, taskDropAllowed])
 
 	async function beginColumnDelete(column) {
 		setCheckingColumn(true)
@@ -184,10 +259,11 @@ export default function Dashboard() {
 				</div> : null}
 			</div>
 			{isManager ? <form className="flex max-w-sm gap-2" onSubmit={submitColumn}>
-				<Input placeholder="Новая колонка" value={columnTitle} onChange={event => setColumnTitle(event.target.value)} />
-				<Button type="submit" variant="outline"><Plus />Колонка</Button>
+				<Input placeholder="Новая колонка" disabled={creatingColumn} value={columnTitle} onChange={event => setColumnTitle(event.target.value)} />
+				<Button type="submit" variant="outline" disabled={creatingColumn || !columnTitle.trim()}>{creatingColumn ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : <Plus />}{creatingColumn ? taskText.creatingColumn : 'Колонка'}</Button>
 			</form> : null}
 			{actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
+			{draggingTaskId ? <p role="status" className="text-xs text-muted-foreground">{taskText.drag}</p> : null}
 			<KanbanLayout>
                 {board.columns.map((column, index) => <KanbanColumn key={column.id}
                     column={column} index={index} columns={board.columns}
@@ -197,6 +273,9 @@ export default function Dashboard() {
                     setEditingColumn={setEditingColumn} checkingColumn={checkingColumn}
                     beginColumnDelete={beginColumnDelete} setOpenId={setOpenId} setPendingDelete={setPendingDelete}
                     moveTask={moveTask} saveDraft={saveDraft} cancelDraft={cancelDraft} setDraft={setDraft} savingDraft={savingDraft}
+                    draggingTaskId={draggingTaskId} dropActive={dropColumnId === column.id}
+                    onTaskDragStart={startTaskDrag} onTaskDragEnd={endTaskDrag} onTaskDragOver={overTaskColumn}
+                    onTaskDragLeave={leaveTaskColumn} onTaskDrop={dropTask}
                 />)}
 			</KanbanLayout>
 			<Dialog open={Boolean(openTask)} onOpenChange={open => !open && closeTask()}>

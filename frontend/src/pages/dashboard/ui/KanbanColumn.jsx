@@ -3,11 +3,16 @@ import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from 'lucid
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import KanbanCard from './KanbanCard'
+import { cn } from '@/lib/utils'
+import { taskText } from '@/shared/messages/tasks'
 
 function KanbanColumn({ column, index, columns, tasks, draft, editingColumn, isManager, user,
     run, updateColumn, setEditingColumn, checkingColumn, beginColumnDelete, setOpenId,
-    setPendingDelete, moveTask, saveDraft, cancelDraft, setDraft, savingDraft }) {
-    return <div key={column.id} className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-muted p-3.5">
+    setPendingDelete, moveTask, saveDraft, cancelDraft, setDraft, savingDraft,
+    draggingTaskId, dropActive, onTaskDragStart, onTaskDragEnd, onTaskDragOver, onTaskDragLeave, onTaskDrop }) {
+    return <div key={column.id} data-column-id={column.id}
+        onDragOver={event => onTaskDragOver(event, column.id)} onDragLeave={onTaskDragLeave} onDrop={event => onTaskDrop(event, column.id)}
+        className={cn('flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-muted p-3.5 transition-colors animate-in fade-in slide-in-from-bottom-3 duration-300 motion-reduce:animate-none', dropActive && 'border-primary bg-primary/10 ring-2 ring-primary/40')}>
 						<div className="flex min-w-0 items-center gap-1 text-sm font-semibold text-secondary-foreground">
 							{editingColumn?.id === column.id ? <form className="flex min-w-0 flex-1 gap-1" onSubmit={event => { event.preventDefault(); run(updateColumn(column.id, { title: editingColumn.title })); setEditingColumn(null) }}>
 								<Input autoFocus className="h-7 text-xs" value={editingColumn.title} onChange={event => setEditingColumn({ ...editingColumn, title: event.target.value })} />
@@ -22,7 +27,9 @@ function KanbanColumn({ column, index, columns, tasks, draft, editingColumn, isM
 							<Button size="icon" variant="ghost" className="h-6 w-6" aria-label="Удалить колонку" disabled={checkingColumn} onClick={() => beginColumnDelete(column)}><Trash2 className="h-3 w-3" /></Button>
 						</div> : null}
 						<div className="flex min-w-0 flex-col gap-2.5">
-							{tasks.map(task => <KanbanCard key={task.id} task={task} columns={columns} canMove={isManager || task.assignee_id === user?.id} canDelete={isManager} onOpen={() => setOpenId(task.id)} onDelete={() => setPendingDelete(task)} onMove={next => run(moveTask(task.id, next))} />)}
+							{tasks.map(task => <KanbanCard key={task.id} task={task} columns={columns} canMove={isManager || task.assignee_id === user?.id} canDelete={isManager} onOpen={() => setOpenId(task.id)} onDelete={() => setPendingDelete(task)} onMove={next => run(moveTask(task.id, next))}
+								dragging={draggingTaskId === task.id} onDragStart={event => onTaskDragStart(event, task.id)} onDragEnd={onTaskDragEnd} />)}
+							{dropActive ? <div className="rounded-lg border border-dashed border-primary/60 bg-primary/5 px-3 py-4 text-center text-xs text-primary">{taskText.drop}</div> : null}
 							{draft ? <form
 								className="rounded-lg border border-primary/40 bg-card p-3 shadow-sm"
 								onSubmit={event => saveDraft(event, column.id)}
@@ -45,4 +52,5 @@ export default memo(KanbanColumn, (a, b) =>
     a.column === b.column && a.columns === b.columns && a.index === b.index &&
     a.draft === b.draft && a.editingColumn === b.editingColumn && a.isManager === b.isManager &&
     a.user === b.user && a.checkingColumn === b.checkingColumn && a.savingDraft === b.savingDraft &&
+    a.draggingTaskId === b.draggingTaskId && a.dropActive === b.dropActive &&
     a.tasks.length === b.tasks.length && a.tasks.every((task, index) => task === b.tasks[index]))

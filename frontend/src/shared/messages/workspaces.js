@@ -1,4 +1,5 @@
 export const roles = { owner: 'Владелец', admin: 'Администратор', member: 'Участник' }
+export const hierarchyText = { root: 'Переместить в корень', moving: 'Перемещение…' }
 export const activityLabels = {
 	'column.create': 'создал колонку', 'column.update': 'изменил колонку', 'column.delete': 'удалил колонку',
 	'folder.delete': 'удалил папку вместе с содержимым', 'folder.update': 'изменил папку',

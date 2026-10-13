@@ -31,3 +31,20 @@ it('measures individual columns and updates their spans after content or width c
 	expect(disconnect).toHaveBeenCalled()
 	expect(cancelFrame).toHaveBeenCalledWith(1)
 })
+
+for (const reducedMotion of [false, true]) {
+	it(`animates changed column positions only when reduced motion is ${reducedMotion}`, () => {
+		let notify, frame
+		vi.stubGlobal('matchMedia', () => ({ matches: reducedMotion }))
+		vi.stubGlobal('requestAnimationFrame', callback => { frame = callback; return 1 })
+		vi.stubGlobal('ResizeObserver', class { constructor(callback) { notify = callback } observe() {} disconnect() {} })
+		const { container } = render(<KanbanLayout><div key="first">First</div><div key="second">Second</div></KanbanLayout>)
+		const wrapper = container.firstChild.children[1]
+		wrapper.animate = vi.fn(() => ({ cancel: vi.fn() }))
+		Object.defineProperty(wrapper, 'offsetLeft', { configurable: true, value: 300 })
+		act(() => notify([{ target: wrapper.firstChild }]))
+		act(() => frame())
+		if (reducedMotion) expect(wrapper.animate).not.toHaveBeenCalled()
+		else expect(wrapper.animate).toHaveBeenCalledWith([{ transform: 'translate(-300px, 0px)' }, { transform: 'translate(0, 0)' }], { duration: 240, easing: 'ease-out' })
+	})
+}

@@ -1,1 +1,3 @@
-export const taskText = { firstColumn: 'Сначала создайте колонку', moving: 'Перемещение…', moved: 'Задача перемещена', status: 'Колонка', unknownAuthor: 'неизвестно', close: 'Закрыть', columnLabel: 'Колонка задачи', addDescription: 'Добавить описание…', unassigned: 'Не назначен', assignee: 'исполнитель', author: 'автор', created: 'создано', updated: 'обновлено', ownOnly: 'Вы можете перемещать только свои задачи' }
+export const taskText = { firstColumn: 'Сначала создайте колонку', moving: 'Перемещение…', moved: 'Задача перемещена', status: 'Колонка', unknownAuthor: 'неизвестно', close: 'Закрыть', columnLabel: 'Колонка задачи', addDescription: 'Добавить описание…', unassigned: 'Не назначен', assignee: 'исполнитель', author: 'автор', created: 'создано', updated: 'обновлено', ownOnly: 'Вы можете перемещать только свои задачи',
+	drag: 'Перетащите задачу в нужную колонку', drop: 'Отпустите, чтобы переместить', creatingColumn: 'Добавление…',
+}

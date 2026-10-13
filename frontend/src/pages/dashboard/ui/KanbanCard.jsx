@@ -1,8 +1,10 @@
 import { memo } from 'react'
 import { useBoardsStore } from '@/shared/store/boardsStore'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { Check, ChevronDown, GripVertical, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useWorkspaceStore } from '@/shared/store/workspaceStore'
+import { cn } from '@/lib/utils'
+import { taskText } from '@/shared/messages/tasks'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -14,18 +16,24 @@ function stopCardClick(e) {
 	e.stopPropagation()
 }
 
-function KanbanCard({ task, columns, canMove, canDelete, onOpen, onDelete, onMove }) {
+function KanbanCard({ task, columns, canMove, canDelete, onOpen, onDelete, onMove, dragging, onDragStart, onDragEnd }) {
 	const moving = useBoardsStore(state => state.moving[task.id])
 	const members = useWorkspaceStore(state => state.members)
 	const assignee = members.find(member => member.user_id === task.assignee_id)
 	const column = columns.find(item => item.id === task.column_id)
 	return (
 		<div
-			className="flex cursor-pointer flex-col gap-2 rounded-lg border border-border border-l-[3px] border-l-primary bg-card p-3 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300"
-			onClick={onOpen}
+			data-task-id={task.id} draggable={canMove && !moving}
+			onDragStart={event => {
+				if (event.target.closest('button, a, input, textarea, select')) { event.preventDefault(); return }
+				onDragStart(event)
+			}}
+			onDragEnd={onDragEnd}
+			className={cn('flex cursor-pointer flex-col gap-2 rounded-lg border border-border border-l-[3px] border-l-primary bg-card p-3 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300 motion-reduce:animate-none', canMove && !moving && 'cursor-grab active:cursor-grabbing', (dragging || moving) && 'opacity-50')}
+			onClick={() => { if (!dragging && !moving) onOpen() }}
 		>
 			<div className="flex items-center justify-between">
-				<span className="text-[0.7rem] font-semibold tracking-wider text-primary">#{task.uid}</span>
+				<span className="flex items-center gap-1 text-[0.7rem] font-semibold tracking-wider text-primary">{canMove ? <GripVertical className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> : null}#{task.uid}</span>
 				{canDelete ? <Button
 					type="button"
 					variant="ghost"
@@ -41,6 +49,7 @@ function KanbanCard({ task, columns, canMove, canDelete, onOpen, onDelete, onMov
 				</Button> : null}
 			</div>
 			<p className="text-sm leading-snug text-foreground">{task.title}</p>
+			{moving ? <span role="status" className="text-xs text-muted-foreground">{taskText.moving}</span> : null}
 			{task.assignee_id ? (
 				<p className="truncate text-xs text-muted-foreground">Исполнитель: {assignee?.login ?? 'неизвестен'}</p>
 			) : null}
@@ -76,4 +85,4 @@ function KanbanCard({ task, columns, canMove, canDelete, onOpen, onDelete, onMov
 	)
 }
 
-export default memo(KanbanCard, (a, b) => a.task === b.task && a.columns === b.columns && a.canMove === b.canMove && a.canDelete === b.canDelete)
+export default memo(KanbanCard, (a, b) => a.task === b.task && a.columns === b.columns && a.canMove === b.canMove && a.canDelete === b.canDelete && a.dragging === b.dragging)
